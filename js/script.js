@@ -68,13 +68,67 @@ function showOnly(id) {
   window.scrollTo(0,0);
 }
 
-const STATIC_PAGES = ['home','open-account','about','faq','terms','privacy','security'];
+const STATIC_PAGES = ['home','personal','business','contact','open-account','about','faq','terms','privacy','security'];
 function showPublicPage(name) {
   document.querySelectorAll('.public-page').forEach(el => {
     el.classList.toggle('hide', el.id !== 'page-' + name);
   });
   window.scrollTo(0,0);
+  closePublicNav();
   if (name === 'open-account') generateCaptcha();
+  if (name === 'contact') resetContactForm();
+}
+
+/* ---------------- Mobile nav (public site) ---------------- */
+function togglePublicNav() {
+  const nav = document.getElementById('mobile-nav');
+  const open = nav.classList.toggle('hide') === false;
+  document.querySelector('#public-view .menu-toggle').setAttribute('aria-expanded', String(open));
+}
+function closePublicNav() {
+  const nav = document.getElementById('mobile-nav');
+  if (!nav) return;
+  nav.classList.add('hide');
+  const t = document.querySelector('#public-view .menu-toggle');
+  if (t) t.setAttribute('aria-expanded', 'false');
+}
+
+/* ---------------- Contact form ----------------
+   Concept site: there is no backend, so the message is validated and
+   confirmed on screen but not actually sent anywhere. To make it real,
+   POST the fields below to a form service or your own API in handleContact.
+------------------------------------------------ */
+function handleContact(e) {
+  e.preventDefault();
+  const name = document.getElementById('ct-name').value.trim();
+  const email = document.getElementById('ct-email').value.trim();
+  const message = document.getElementById('ct-message').value.trim();
+  const errEl = document.getElementById('ct-error');
+  errEl.classList.add('hide');
+
+  if (!name) return showContactError('Please enter your name.');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showContactError('Please enter a valid email address.');
+  if (message.length < 10) return showContactError('Please tell us a little more in your message.');
+
+  document.getElementById('contact-success-text').textContent =
+    `Thanks, ${name.split(' ')[0]}. A banker will get back to you at ${email} soon. If it's urgent, call (240) 242-7078.`;
+  document.getElementById('contact-form').classList.add('hide');
+  const ok = document.getElementById('contact-success');
+  ok.classList.remove('hide');
+  ok.focus();
+}
+function showContactError(msg) {
+  const errEl = document.getElementById('ct-error');
+  errEl.textContent = msg;
+  errEl.classList.remove('hide');
+}
+function resetContactForm() {
+  const form = document.getElementById('contact-form');
+  if (!form) return;
+  form.reset();
+  form.classList.remove('hide');
+  document.getElementById('contact-success').classList.add('hide');
+  document.getElementById('ct-error').classList.add('hide');
 }
 
 function handleLogin(e) {
@@ -92,6 +146,9 @@ function toggleMobileNav() {
 /* ---------------- Router ----------------
    Every page has its own real, shareable URL:
    #/              marketing home
+   #/personal      personal banking
+   #/business      business banking
+   #/contact       contact page with form
    #/about         about page
    #/faq           FAQ page
    #/terms         terms of service
