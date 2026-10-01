@@ -19,17 +19,27 @@
     <div class="wrap topbar">
       <a class="brand" href="#/" style="text-decoration:none; color:inherit;"><span class="mark"></span>Waypoint</a>
       <nav class="primary">
-        <a href="#/">Personal</a>
-        <a href="#/">Business</a>
+        <a href="#/personal">Personal</a>
+        <a href="#/business">Business</a>
         <a href="#/about">About</a>
         <a href="#/faq">FAQ</a>
+        <a href="#/contact">Contact</a>
       </nav>
       <div class="topbar-actions">
         <a class="btn btn-on-ink btn-sm" href="#/login">Log in</a>
         <a class="btn btn-brass btn-sm" href="#/open-account">Open an account</a>
-        <a class="menu-toggle" aria-label="Menu" href="#/login">☰</a>
+        <button class="menu-toggle" type="button" aria-label="Menu" aria-expanded="false" onclick="togglePublicNav()">☰</button>
       </div>
     </div>
+    <nav class="mobile-nav hide" id="mobile-nav" aria-label="Mobile">
+      <a href="#/personal">Personal</a>
+      <a href="#/business">Business</a>
+      <a href="#/about">About</a>
+      <a href="#/faq">FAQ</a>
+      <a href="#/contact">Contact</a>
+      <a href="#/login">Log in</a>
+      <a href="#/open-account">Open an account</a>
+    </nav>
   </header>
 
   <div class="public-page" id="page-home">
@@ -86,17 +96,17 @@
         <div class="offer-row">
           <h3>Personal loans</h3>
           <p>Fixed-rate loans for the things that come up — a car, a repair, a move. Answers within one business day.</p>
-          <div class="offer-cta"><a class="btn btn-ghost btn-sm" href="#/login">See rates</a></div>
+          <div class="offer-cta"><a class="btn btn-ghost btn-sm" href="#/personal">See personal banking</a></div>
         </div>
         <div class="offer-row">
           <h3>Small business banking</h3>
           <p>Business checking with same-day transfers and a banker who knows your account by name, not ticket number.</p>
-          <div class="offer-cta"><a class="btn btn-ghost btn-sm" href="#/open-account">Get started</a></div>
+          <div class="offer-cta"><a class="btn btn-ghost btn-sm" href="#/business">See business banking</a></div>
         </div>
         <div class="offer-row">
           <h3>Cards</h3>
           <p>A debit card and a low-interest credit card, both manageable from the same dashboard — freeze, track, done.</p>
-          <div class="offer-cta"><a class="btn btn-ghost btn-sm" href="#/login">Compare cards</a></div>
+          <div class="offer-cta"><a class="btn btn-ghost btn-sm" href="#/personal">Compare cards</a></div>
         </div>
       </div>
     </div>
@@ -122,6 +132,215 @@
       <a class="btn btn-primary" href="#/open-account">Get started</a>
     </div>
   </section>
+  </div>
+
+
+  <!-- Personal -->
+  <div class="public-page hide" id="page-personal">
+    <section class="page-hero">
+      <div class="wrap">
+        <p class="eyebrow">Personal banking</p>
+        <h1>Everyday money, handled plainly.</h1>
+        <p class="lede">Checking, savings, loans and cards that are easy to understand, with real people a phone call away.</p>
+        <div class="hero-ctas">
+          <a class="btn btn-brass" href="#/open-account">Open an account</a>
+          <a class="btn btn-on-ink" href="#/contact">Talk to a banker</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="public-section" style="border-top:none;">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Accounts for how you actually live</h2>
+          <p>Start with one, add the others when you need them. Everything lives in the same dashboard.</p>
+        </div>
+        <div class="feature-grid">
+          <div class="feature-card">
+            <h3>Everyday Checking</h3>
+            <p>No monthly fee and no minimum balance. Includes a debit card, mobile check deposit and free transfers between your own accounts.</p>
+            <ul class="tick-list"><li>No monthly maintenance fee</li><li>Mobile check deposit</li><li>Instant transfers between accounts</li></ul>
+          </div>
+          <div class="feature-card">
+            <h3>Foundation Savings</h3>
+            <p>A savings account that pays interest monthly and doesn't make you jump through hoops to earn a fair rate.</p>
+            <ul class="tick-list"><li>Interest paid monthly</li><li>Set up automatic transfers</li><li>No minimum balance</li></ul>
+          </div>
+          <div class="feature-card">
+            <h3>Personal loans</h3>
+            <p>Fixed-rate loans for a car, a repair or a move. Your payment is the same every month, and you'll hear back within one business day.</p>
+            <ul class="tick-list"><li>Fixed rate, fixed payment</li><li>Decision in one business day</li><li>No prepayment penalty</li></ul>
+          </div>
+          <div class="feature-card">
+            <h3>Debit &amp; credit cards</h3>
+            <p>A debit card with your checking account and a low-interest rewards credit card. Freeze either one instantly from the Cards page.</p>
+            <ul class="tick-list"><li>Instant freeze and unfreeze</li><li>Low-interest rewards card</li><li>Track spending in one place</li></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="public-section">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Getting started takes three steps</h2>
+          <p>No branch visit required, though you're always welcome.</p>
+        </div>
+        <div class="steps">
+          <div class="step"><span class="step-n">1</span><h3>Apply online</h3><p>Fill in a short form with your name and contact details. It takes about two minutes.</p></div>
+          <div class="step"><span class="step-n">2</span><h3>Verify your identity</h3><p>Have a government ID and your Social Security number ready to finish verification.</p></div>
+          <div class="step"><span class="step-n">3</span><h3>Fund and go</h3><p>Make your opening deposit and start using online banking and your new card.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta-band">
+      <div class="wrap">
+        <h2>Ready to bank somewhere that picks up the phone?</h2>
+        <div class="hero-ctas" style="justify-content:center;">
+          <a class="btn btn-primary" href="#/open-account">Open an account</a>
+          <a class="btn btn-ghost" href="#/contact">Contact us</a>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Business -->
+  <div class="public-page hide" id="page-business">
+    <section class="page-hero">
+      <div class="wrap">
+        <p class="eyebrow">Small business banking</p>
+        <h1>A banker who knows your business by name.</h1>
+        <p class="lede">Business checking, payments and credit for owners who'd rather run their company than chase a support ticket.</p>
+        <div class="hero-ctas">
+          <a class="btn btn-brass" href="#/contact">Talk to a business banker</a>
+          <a class="btn btn-on-ink" href="#/open-account">Open an account</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="public-section" style="border-top:none;">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Built for small teams</h2>
+          <p>The tools a growing business needs, without the fees designed for much bigger ones.</p>
+        </div>
+        <div class="feature-grid">
+          <div class="feature-card">
+            <h3>Business Checking</h3>
+            <p>Same-day transfers, simple monthly pricing and a dashboard that shows cash on hand at a glance.</p>
+            <ul class="tick-list"><li>Same-day transfers</li><li>Business debit cards for your team</li><li>Clear, published fee schedule</li></ul>
+          </div>
+          <div class="feature-card">
+            <h3>Payments &amp; deposits</h3>
+            <p>Accept checks and card payments, deposit from your phone, and see incoming funds as soon as they post.</p>
+            <ul class="tick-list"><li>Mobile check deposit</li><li>Card acceptance</li><li>Invoice-friendly account details</li></ul>
+          </div>
+          <div class="feature-card">
+            <h3>Lines of credit &amp; loans</h3>
+            <p>Flexible credit for inventory, equipment or a slow month. Decisions are made by people who can explain them.</p>
+            <ul class="tick-list"><li>Revolving lines of credit</li><li>Equipment and expansion loans</li><li>Local decision-making</li></ul>
+          </div>
+          <div class="feature-card">
+            <h3>Your own banker</h3>
+            <p>One named contact who understands your account, your seasons and your goals, reachable by phone.</p>
+            <ul class="tick-list"><li>Direct line to your banker</li><li>Annual account review</li><li>Help planning for growth</li></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="public-section">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Who we work with</h2>
+          <p>If you're running something real and want a straightforward bank, you're in the right place.</p>
+        </div>
+        <div class="stats-band">
+          <div class="stat"><b>Sole proprietors</b><span>Separate your business and personal money without the paperwork headache.</span></div>
+          <div class="stat"><b>Local shops &amp; studios</b><span>Daily deposits, payroll and supplier payments handled in one account.</span></div>
+          <div class="stat"><b>Growing teams</b><span>Cards and access for employees, with credit ready when you need it.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta-band">
+      <div class="wrap">
+        <h2>Tell us about your business.</h2>
+        <div class="hero-ctas" style="justify-content:center;">
+          <a class="btn btn-primary" href="#/contact">Contact a banker</a>
+          <a class="btn btn-ghost" href="tel:+12402427078">Call (240) 242-7078</a>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Contact -->
+  <div class="public-page hide" id="page-contact">
+    <section class="page-hero">
+      <div class="wrap">
+        <p class="eyebrow">Contact us</p>
+        <h1>We'd like to hear from you.</h1>
+        <p class="lede">Call us, or send a message and a banker will get back to you.</p>
+      </div>
+    </section>
+
+    <section class="public-section" style="border-top:none; padding-top:56px;">
+      <div class="wrap contact-layout">
+        <div class="contact-info">
+          <div class="contact-block">
+            <h3>Call us</h3>
+            <a class="contact-phone" href="tel:+12402427078">(240) 242-7078</a>
+            <p>Speak with a member support banker.</p>
+          </div>
+          <div class="contact-block">
+            <h3>Hours</h3>
+            <p>Monday to Friday, 8:00 am to 6:00 pm<br>Saturday, 9:00 am to 1:00 pm<br>Closed Sunday</p>
+          </div>
+          <div class="contact-block">
+            <h3>Already a member?</h3>
+            <p>You can also send a secure message from inside online banking.</p>
+            <a class="btn btn-ghost btn-sm" href="#/login">Log in</a>
+          </div>
+          <div class="contact-block">
+            <h3>Lost or stolen card?</h3>
+            <p>Freeze it right away from the Cards page in online banking, then call us for a replacement.</p>
+          </div>
+        </div>
+
+        <div class="card card-pad contact-form-card">
+          <div id="contact-success" class="contact-success hide" role="status" tabindex="-1">
+            <h2>Thanks, your message is in.</h2>
+            <p id="contact-success-text">A banker will get back to you soon.</p>
+            <button type="button" class="btn btn-ghost" onclick="resetContactForm()">Send another message</button>
+          </div>
+          <form id="contact-form" novalidate onsubmit="handleContact(event)">
+            <div class="section-title">Send us a message</div>
+            <div class="field-row">
+              <div class="field"><label for="ct-name">Full name</label><input id="ct-name" type="text" autocomplete="name" required></div>
+              <div class="field"><label for="ct-email">Email</label><input id="ct-email" type="email" autocomplete="email" required></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label for="ct-phone">Phone (optional)</label><input id="ct-phone" type="tel" autocomplete="tel" placeholder="(555) 123-4567"></div>
+              <div class="field">
+                <label for="ct-topic">What can we help with?</label>
+                <select id="ct-topic">
+                  <option>Personal banking</option>
+                  <option>Business banking</option>
+                  <option>Loans</option>
+                  <option>Cards</option>
+                  <option>Something else</option>
+                </select>
+              </div>
+            </div>
+            <div class="field"><label for="ct-message">Message</label><textarea id="ct-message" rows="6" required placeholder="Tell us a little about what you need."></textarea></div>
+            <div id="ct-error" class="hide" style="color:var(--rust); font-size:0.85rem; margin-bottom:14px;" role="alert"></div>
+            <button type="submit" class="btn btn-primary btn-block">Send message</button>
+            <p class="form-note">Please don't include account numbers, passwords or your Social Security number in this form.</p>
+          </form>
+        </div>
+      </div>
+    </section>
   </div>
 
   <!-- Open an account -->
@@ -261,14 +480,15 @@
         <div>
           <div class="brand" style="color:var(--text-on-ink); margin-bottom:12px;"><span class="mark"></span>Waypoint</div>
           <p style="max-width:32ch; line-height:1.5;">A community bank for people who want their money handled plainly.</p>
+          <p style="margin-top:12px;"><a href="tel:+12402427078" style="text-decoration:none; color:var(--text-on-ink);">(240) 242-7078</a></p>
         </div>
         <div>
           <h4>Banking</h4>
-          <ul><li><a href="#/">Checking</a></li><li><a href="#/">Savings</a></li><li><a href="#/">Loans</a></li></ul>
+          <ul><li><a href="#/personal">Personal</a></li><li><a href="#/business">Business</a></li><li><a href="#/contact">Contact us</a></li></ul>
         </div>
         <div>
           <h4>Company</h4>
-          <ul><li><a href="#/about">About</a></li><li><a href="#/faq">FAQ</a></li><li><a href="#">Careers</a></li></ul>
+          <ul><li><a href="#/about">About</a></li><li><a href="#/faq">FAQ</a></li><li><a href="#/contact">Contact</a></li></ul>
         </div>
         <div>
           <h4>Online banking</h4>
