@@ -1465,9 +1465,10 @@ let adminView = 'list';       // 'list' | 'add' | 'detail'
 let adminSelectedId = null;
 let adminEditing = false;
 let adminIssuing = false;
+let adminAddingAcct = false;
 let adminNotice = '';
 
-function adminGoList()  { adminView = 'list';  adminSelectedId = null; adminEditing = false; adminIssuing = false; renderAdmin(); if (Backend.enabled) adminReload(); }
+function adminGoList()  { adminView = 'list';  adminSelectedId = null; adminEditing = false; adminIssuing = false; adminAddingAcct = false; renderAdmin(); if (Backend.enabled) adminReload(); }
 
 /* Remote mode: re-read every customer (their transfers change balances while the admin is looking). */
 async function adminReload(quiet) {
@@ -1483,7 +1484,7 @@ async function adminReload(quiet) {
 function adminGoAdd()   { adminView = 'add';   renderAdmin(); }
 async function adminGoDetail(id, editing) {
   if (Backend.enabled) await adminReload(true);    // open the customer with their latest server data
-  adminView = 'detail'; adminSelectedId = id; adminEditing = !!editing; adminIssuing = false; adminNotice = ''; renderAdmin();
+  adminView = 'detail'; adminSelectedId = id; adminEditing = !!editing; adminIssuing = false; adminAddingAcct = false; adminNotice = ''; renderAdmin();
 }
 function adminStartEdit(id) { adminEditing = true; renderAdminDetail(id); }
 function adminCancelEdit(id) { adminEditing = false; renderAdminDetail(id); }
@@ -1634,6 +1635,14 @@ function renderAdminDetail(id) {
     ${adminStatusHTML(c)}
 
     ${adminEditing ? adminEditFormHTML(c) : adminProfileHTML(c)}
+
+    <div class="card card-pad" style="margin-bottom:24px;">
+      <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>Accounts</span>
+        <button class="btn ${adminAddingAcct ? 'btn-ghost' : 'btn-brass'} btn-sm" onclick="adminToggleAddAcct()">${adminAddingAcct ? 'Cancel' : '+ Add account'}</button>
+      </div>
+      ${adminAddingAcct ? adminAddAcctFormHTML(c) : '<p style="font-size:0.85rem; color:var(--text-soft); margin:0;">Add a savings, checking or other account for this customer.</p>'}
+    </div>
 
     <div class="acct-grid">
       ${c.accounts.map(a => `
@@ -1820,6 +1829,42 @@ function adminLiftRestriction(id) {
 }
 
 /* Cards: issue (debit or credit) and delete */
+function adminToggleAddAcct() { adminAddingAcct = !adminAddingAcct; renderAdminDetail(adminSelectedId); }
+
+function adminAddAcctFormHTML(c) {
+  return `
+    <form class="card-issue-form" onsubmit="adminSubmitAddAccount(event,'${c.id}')">
+      <div class="form-cols">
+        <div class="field"><label for="newacct-type">Account type</label>
+          <input id="newacct-type" type="text" list="newacct-types" value="Foundation Savings" maxlength="40" required>
+          <datalist id="newacct-types"><option value="Foundation Savings"><option value="Everyday Checking"><option value="High-Yield Savings"><option value="Money Market"><option value="Business Checking"></datalist></div>
+        <div class="field"><label for="newacct-bal">Opening balance</label>
+          <div class="amount-input"><span>$</span><input id="newacct-bal" type="number" min="0" step="0.01" value="0"></div></div>
+      </div>
+      <div style="display:flex; gap:10px; margin-bottom:6px;">
+        <button type="submit" class="btn btn-primary btn-sm">Add account</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="adminToggleAddAcct()">Cancel</button>
+      </div>
+    </form>
+  `;
+}
+
+function adminSubmitAddAccount(e, custId) {
+  e.preventDefault();
+  const c = state.customers.find(x => x.id === custId);
+  const type = document.getElementById('newacct-type').value.trim();
+  const bal = Math.max(0, parseFloat(document.getElementById('newacct-bal').value) || 0);
+  if (!type) return;
+  let last4;
+  do { last4 = String(1000 + Math.floor(Math.random() * 9000)); } while (c.accounts.some(a => a.number === '••••' + last4));
+  const acct = { id: 'acct_' + Date.now().toString(36) + Math.floor(Math.random() * 1000), type, number: '••••' + last4, balance: +bal.toFixed(2), transactions: [] };
+  if (bal > 0) acct.transactions.push({ id: newTxId(), date: todayStr(), desc: 'Opening deposit', cat: 'Deposit', amount: +bal.toFixed(2) });
+  c.accounts.push(acct);
+  adminAddingAcct = false;
+  saveState();
+  renderAdminDetail(custId);
+}
+
 function adminToggleIssue() { adminIssuing = !adminIssuing; renderAdminDetail(adminSelectedId); }
 
 function defaultExpiry() {
@@ -1863,7 +1908,7 @@ function adminSubmitIssueCard(e, custId) {
   };
   if (kind === 'Credit') { card.balance = 0; card.limit = parseFloat(document.getElementById('issue-limit').value) || 5000; }
   c.cards.push(card);
-  adminIssuing = false;
+  adminIssuing = false; adminAddingAcct = false;
   saveState();
   renderAdminDetail(custId);
 }
