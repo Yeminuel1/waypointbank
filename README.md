@@ -5,8 +5,14 @@ pages, account opening with a custom CAPTCHA, and a client-side banking
 app (dashboard, accounts, transfers, cards) backed by fake data stored
 in the browser's `localStorage`.
 
-There is no backend: all data lives in the browser's `localStorage`, so
-changes made in the admin panel only show up in the same browser.
+Portfolio project: a simulated bank. No real money, accounts or personal data.
+
+It runs in two modes:
+
+- **Demo mode** (default, `js/config.js` empty): everything is stored in the
+  browser's `localStorage`. Works offline, but data is per-browser.
+- **Supabase mode** (`js/config.js` filled in): everything is stored in a
+  Supabase database and works from any device. See *Backend setup* below.
 
 ## Run locally
 
@@ -30,13 +36,63 @@ Every push to `main` will auto-redeploy.
 ## Structure
 
 ```
-index.html    page markup
-css/style.css all styles
-js/script.js  all app logic (routing, state, rendering)
-vercel.json   serves index.html for every route
+index.html                          page markup
+css/style.css                       all styles
+js/script.js                        app logic (routing, state, rendering)
+js/backend.js                       Supabase layer (unused in demo mode)
+js/config.js                        Supabase URL + anon key
+supabase/schema.sql                 database tables, security rules, functions
+supabase/functions/admin-users/     edge function for admin-only actions
+vercel.json                         serves index.html for every route
 ```
 
-## Demo logins
+## Backend setup (Supabase)
+
+1. Create a project at supabase.com.
+2. **SQL Editor → New query**, paste all of `supabase/schema.sql`, click **Run**.
+3. **Authentication → Providers → Email**: turn **off** "Confirm email".
+4. **Authentication → Users → Add user**: create your own admin login
+   (email + password, tick *Auto Confirm User*). Then in the SQL Editor run
+   (use your email):
+   ```sql
+   insert into public.admins (user_id)
+   select id from auth.users where email = 'you@example.com';
+   ```
+5. Deploy the edge function (it creates customer logins and resets
+   passwords — things a browser must never be allowed to do):
+   ```
+   npm i -g supabase
+   supabase login
+   supabase link --project-ref YOUR_PROJECT_REF
+   supabase functions deploy admin-users
+   ```
+6. Copy **Project Settings → API → Project URL** and the **anon public** key
+   into `js/config.js`. (The anon key is meant to be public. Never put the
+   `service_role` key in the website.)
+7. Push to GitHub; Vercel redeploys automatically.
+8. Open `/#/admin-login`, sign in with the admin **email** from step 4, and
+   use **Add customer**. Customers who use *Open an account* show up as
+   *Pending* for you to approve.
+
+How it fits together: customers sign in with Supabase Auth (their username
+becomes `username@users.waypoint-bank.app` behind the scenes). Row level
+security means a customer can only ever read their own record, and only
+admins can read everyone's. Suspending an account is enforced in the
+database too — a suspended customer's saves are refused even if they bypass
+the website. If you change `users.waypoint-bank.app`, change it in
+`js/config.js`, `supabase/schema.sql` and the edge function together.
+
+Money safety: in Supabase mode a customer's browser can **not** change balances. Transfers, wires, Zelle,
+bill pay and check deposits all go through the `do_move` database function, which re-checks the account
+status, access code, ownership of the accounts, available funds, fees and limits on the server. `save_my_data`
+ignores any balances/transactions sent by the browser. Only admins (balance edits, adjustments) can change
+them directly.
+
+Known limits (fine for a portfolio, not for real money): access codes are stored in readable form so admins
+can see them; photos are stored inside the database record, so keep them small; mobile check deposits are
+credited instantly (capped at $10,000) because there is no real check to verify.
+
+## Demo logins (demo mode only)
 
 | Role | Username | Password | Access / transfer code |
 |---|---|---|---|

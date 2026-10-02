@@ -228,6 +228,7 @@
           <input id="oa-captcha" type="text" placeholder="Enter the characters above" autocomplete="off" required style="margin-top:10px;">
           <div id="oa-captcha-error" class="hide" style="color:var(--rust); font-size:0.82rem; margin-top:6px;">That didn't match the code — try the new one.</div>
           <div class="captcha-hint">Not case-sensitive. Runs locally in your browser.</div>
+          <div class="captcha-hint" style="margin-top:14px;">Portfolio project — this is a simulated bank. Don't enter real personal or financial information.</div>
         </div>
         <button type="submit" class="btn btn-primary btn-block" style="margin-top:6px;">Submit application</button>
       </form>
@@ -427,6 +428,7 @@
           <a href="#/privacy" style="opacity:0.7;">Privacy</a>
           <a href="#/security" style="opacity:0.7;">Security</a>
           <a href="#/admin-login" style="opacity:0.5; font-size:0.82rem;">Staff</a>
+          <span class="sim-note">Portfolio project — a simulated bank. No real money or accounts.</span>
         </div>
       </div>
     </div>
@@ -448,6 +450,7 @@
         <div id="login-error" class="hide" style="color:var(--rust); font-size:0.85rem; margin-bottom:14px;"></div>
         <button type="submit" class="btn btn-primary btn-block">Log in</button>
       </form>
+      <p class="login-note sim-note-block">Portfolio project — simulated bank, no real money.</p>
       <p class="login-note">New here? <a href="#/open-account" style="color:var(--moss);">Open an account</a> — your login works once an admin approves it.</p>
     </div>
   </div>
@@ -494,6 +497,7 @@
     <div class="sidebar-foot">
       <div class="who" id="sidebar-who" style="display:flex; align-items:center; gap:10px;">Welcome</div>
       <button class="btn btn-on-ink btn-sm btn-block" onclick="logout()">Log out</button>
+      <div class="sim-note-side">Portfolio project — simulated bank, no real money.</div>
     </div>
   </aside>
 
@@ -524,6 +528,7 @@
         <a class="sheet-item" href="#/app/settings"><span class="qa-ic">⚙</span>Settings</a>
       </div>
       <button type="button" class="btn btn-ghost btn-block" style="margin-top:12px;" onclick="logout()">Log out</button>
+      <p class="sim-note-block" style="margin:14px 0 0; text-align:center;">Portfolio project — simulated bank</p>
     </div>
   </div>
 </div>
@@ -545,6 +550,9 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="js/config.js"></script>
+<script src="js/backend.js"></script>
 <script src="js/script.js"></script>
 </body>
 </html>
