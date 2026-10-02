@@ -61,6 +61,7 @@ function seedState() {
 let state = null;
 
 function loadState() {
+  if (Backend.enabled) { state = { customers: [], currentCustomerId: null }; return; }
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -106,6 +107,7 @@ function statusBadge(c) {
 
 /* Reads the latest saved data (the admin may have changed something in another tab). */
 function readStored() {
+  if (Backend.enabled) return null;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) { const p = JSON.parse(raw); if (p && Array.isArray(p.customers)) return p; }
@@ -113,6 +115,7 @@ function readStored() {
   return null;
 }
 function reloadFromStorage() {
+  if (Backend.enabled) return;
   const p = readStored();
   if (p && p.customers.length) { state.customers = p.customers; normalizeState(); }
 }
@@ -143,7 +146,80 @@ function enforceSuspension() {
   return true;
 }
 
+/* ---- Remote (Supabase) saving: debounced, only sends what changed ---- */
+const lastSaved = {};                       // customer id -> row JSON last known on the server
+const lastData = {};                        // customer id -> `data` JSON last known on the server
+let saveTimer = null;
+const rowJson = c => JSON.stringify(Backend.toRow(c));
+
+function toast(msg) {
+  let t = document.getElementById('toast');
+  if (!t) { t = document.createElement('div'); t.id = 'toast'; t.className = 'toast'; document.body.appendChild(t); }
+  t.textContent = msg; t.classList.remove('hide');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.add('hide'), 4500);
+}
+function adminActive() { return location.hash.startsWith('#/admin') && isAdminAuthed(); }
+
+function queueRemoteSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(flushRemote, 250);
+}
+async function flushRemote() {
+  saveTimer = null;
+  try {
+    if (adminActive()) {
+      for (const c of state.customers) {
+        const j = rowJson(c) + '|' + (c.transferCode || '');
+        if (lastSaved[c.id] === j) continue;
+        // Only send balances/cards/profile when they actually changed — a status change
+        // must never overwrite a customer's recent transfers with a stale copy.
+        const dj = JSON.stringify(Backend.toRow(c).data);
+        await Backend.adminSave(c, lastData[c.id] !== dj);
+        lastSaved[c.id] = j; lastData[c.id] = dj;
+      }
+    } else {
+      const c = getCurrentCustomer();
+      if (c && lastSaved[c.id] !== undefined && lastSaved[c.id] !== rowJson(c)) {
+        await Backend.saveMine(c); lastSaved[c.id] = rowJson(c);
+      }
+    }
+  } catch (err) {
+    console.error('Save failed', err);
+    toast('Could not save changes: ' + ((err && err.message) || 'please try again'));
+    if (!adminActive()) { await refreshMine(); enforceSuspension(); }
+  }
+}
+function markAdminSaved() {
+  state.customers.forEach(c => {
+    lastSaved[c.id] = rowJson(c) + '|' + (c.transferCode || '');
+    lastData[c.id] = JSON.stringify(Backend.toRow(c).data);
+  });
+}
+
+/* Pull this customer's latest record (balances the admin changed, status, etc.). */
+function adoptMine(mine) {
+  const existing = state.customers.find(c => c.id === mine.id);
+  state.customers = [mine];
+  state.currentCustomerId = mine.id;
+  lastSaved[mine.id] = rowJson(mine);
+  return !existing || JSON.stringify(Backend.toRow(existing).data) !== JSON.stringify(Backend.toRow(mine).data);
+}
+async function refreshMine() {
+  if (!Backend.enabled || adminActive() || saveTimer) return;
+  const mine = await Backend.loadMine();
+  if (!mine) return;
+  const changed = adoptMine(mine);
+  if (changed && appVisible()) render();
+}
+function startRemoteWatch(id) {
+  Backend.subscribeMine(id, async () => {
+    await refreshMine();
+    if (!enforceSuspension() && location.hash === '#/suspended') renderSuspended();
+  });
+}
+
 function saveState() {
+  if (Backend.enabled) { queueRemoteSave(); return; }
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
   catch (e) { console.warn('Could not save demo state — image may be too large for local storage', e); }
 }
@@ -200,7 +276,12 @@ function newTxId() { return 'tx_' + Date.now() + '_' + Math.floor(Math.random() 
 
 /* Creates a new customer record: one checking account + one debit card.
    status 'approved' can log in immediately; 'pending' needs an admin to approve it first. */
-function createCustomer({ name, username, email, password, photo, startingBalance, status, phone, address, dob, transferCode }) {
+function createCustomer(opts) {
+  const customer = buildCustomer(opts);
+  state.customers.push(customer);
+  return customer;
+}
+function buildCustomer({ name, username, email, password, photo, startingBalance, status, phone, address, dob, transferCode }) {
   const id = 'cust_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
   const acctNum = '••••' + String(1000 + Math.floor(Math.random() * 9000));
   const cardNum = String(1000 + Math.floor(Math.random() * 9000));
@@ -217,7 +298,6 @@ function createCustomer({ name, username, email, password, photo, startingBalanc
     accounts: [{ id: id + '_chk', type: 'Everyday Checking', number: acctNum, balance: startingBalance || 0, transactions: [] }],
     cards: [{ id: id + '_debit', kind: 'Debit', label: 'Everyday Checking Debit', number: cardNum, holder: name, expiry: '12/29', frozen: false }]
   };
-  state.customers.push(customer);
   return customer;
 }
 
@@ -258,6 +338,8 @@ function handleLogin(e) {
   const pass = document.getElementById('li-pass').value;
   const errEl = document.getElementById('login-error');
 
+  if (Backend.enabled) { handleLoginRemote(uname, pass, errEl); return; }
+
   reloadFromStorage();
   const match = state.customers.find(c => c.username.toLowerCase() === uname);
 
@@ -296,11 +378,33 @@ function handleLogin(e) {
   location.hash = '#/verify';
 }
 
+async function handleLoginRemote(uname, pass, errEl) {
+  errEl.classList.add('hide');
+  const r = await Backend.login(uname, pass);
+  const fail = msg => { errEl.textContent = msg; errEl.classList.remove('hide'); };
+  if (r.error) return fail(r.error);
+  if (r.pending) return fail('Your account is still pending admin approval.');
+  adoptMine(r.customer);
+  startRemoteWatch(r.customer.id);
+  document.getElementById('li-pass').value = '';
+  try {
+    sessionStorage.removeItem('waypoint-verified');
+    if (isRestricted(r.customer)) {
+      sessionStorage.setItem('waypoint-suspended', r.customer.id);
+      sessionStorage.removeItem('waypoint-pending');
+      location.hash = '#/suspended';
+    } else {
+      sessionStorage.setItem('waypoint-pending', r.customer.id);
+      location.hash = '#/verify';
+    }
+  } catch (err) { fail('Your browser is blocking session storage.'); }
+}
+
 function renderVerify() {
   const cust = state.customers.find(c => c.id === getPendingId());
   const el = document.getElementById('verify-card');
   if (!cust) { location.hash = '#/login'; return; }
-  const noCode = !cust.transferCode;
+  const noCode = !(Backend.enabled ? cust.hasCode : cust.transferCode);
   el.innerHTML = `
     <div class="brand" style="color:var(--text); margin-bottom:22px;"><span class="mark" style="background:var(--brass);"></span>Waypoint</div>
     <div style="display:flex; flex-direction:column; align-items:center; text-align:center; margin-bottom:22px;">
@@ -331,12 +435,13 @@ function cancelVerify() {
   try { sessionStorage.removeItem('waypoint-pending'); } catch (e) {}
 }
 
-function handleVerify(e) {
+async function handleVerify(e) {
   e.preventDefault();
   const cust = state.customers.find(c => c.id === getPendingId());
   if (!cust) { location.hash = '#/login'; return; }
   const entered = document.getElementById('vf-code').value.trim();
-  if (!cust.transferCode || entered !== String(cust.transferCode)) {
+  const ok = Backend.enabled ? await Backend.checkCode(entered) : (!!cust.transferCode && entered === String(cust.transferCode));
+  if (!ok) {
     document.getElementById('verify-error').classList.remove('hide');
     document.getElementById('vf-code').value = '';
     return;
@@ -390,6 +495,7 @@ function clearSuspendedSession() { try { sessionStorage.removeItem('waypoint-sus
 function suspendedLeave() { clearSuspendedSession(); logout(); }
 
 function logout() {
+  if (Backend.enabled) { Backend.logout(); state.customers = []; state.currentCustomerId = null; }
   try {
     sessionStorage.removeItem('waypoint-verified');
     sessionStorage.removeItem('waypoint-pending');
@@ -521,6 +627,7 @@ function routeFromHash() {
     adminSelectedId = null;
     adminEditing = false;
     renderAdmin();
+    if (Backend.enabled) adminReload();
     return;
   }
 
@@ -673,6 +780,7 @@ function renderAccountDetail(id) {
    one the bank's admin set for the customer in the admin area.
 ------------------------------------------------------------------------------------ */
 let pendingCodeAction = null;
+let verifiedCode = '';   // code the customer just typed; re-checked by the server with every money move
 
 function requireCode(summary, onSuccess) {
   const cust = getCurrentCustomer();
@@ -680,7 +788,7 @@ function requireCode(summary, onSuccess) {
   document.getElementById('code-modal-summary').textContent = summary;
   document.getElementById('code-modal-input').value = '';
   const err = document.getElementById('code-modal-error');
-  if (!cust.transferCode) {
+  if (!(Backend.enabled ? cust.hasCode : cust.transferCode)) {
     err.textContent = 'No transfer code has been set on your account yet. Please contact the bank.';
     err.classList.remove('hide');
     document.getElementById('code-modal-confirm').disabled = true;
@@ -697,12 +805,13 @@ function closeCodeModal() {
   document.getElementById('code-modal').classList.add('hide');
 }
 
-function confirmCodeModal(e) {
+async function confirmCodeModal(e) {
   e.preventDefault();
   const cust = getCurrentCustomer();
   const entered = document.getElementById('code-modal-input').value.trim();
   const err = document.getElementById('code-modal-error');
-  if (!cust.transferCode || entered !== String(cust.transferCode)) {
+  const ok = Backend.enabled ? await Backend.checkCode(entered) : (!!cust.transferCode && entered === String(cust.transferCode));
+  if (!ok) {
     err.textContent = 'Incorrect transfer code. The transfer was not sent.';
     err.classList.remove('hide');
     document.getElementById('code-modal-input').value = '';
@@ -710,6 +819,7 @@ function confirmCodeModal(e) {
   }
   const action = pendingCodeAction;
   closeCodeModal();
+  verifiedCode = entered;
   if (action) action();
 }
 
@@ -756,6 +866,25 @@ function successNote(msg) {
 let flashMessage = '';
 function flash(msg) { flashMessage = msg; render(); flashMessage = ''; }
 function takeFlash() { return flashMessage ? successNote(flashMessage) : ''; }
+
+
+/* Remote mode: money moves are done by the database (do_move), never by this browser. */
+function sendArgs(from, amt, desc, cat, fee, feeDesc) {
+  return { kind: 'send', from: from.id, amount: amt, desc, cat, fee: fee || 0, feeDesc };
+}
+async function serverMove(op, okMsg) {
+  try {
+    await Backend.move(op, verifiedCode);
+    const mine = await Backend.loadMine();
+    if (mine) adoptMine(mine);
+    flash(okMsg);
+  } catch (err) {
+    toast((err && err.message) || 'Could not complete that. Please try again.');
+    const mine = await Backend.loadMine();
+    if (mine) adoptMine(mine);
+    render();
+  } finally { verifiedCode = ''; }
+}
 
 /* ---------------- Transfers ---------------- */
 let transferTab = 'own';
@@ -856,6 +985,7 @@ function submitTransfer(e) {
   if (amt > from.balance) return showErr('tf-error', `Insufficient funds in ${from.type}.`);
 
   requireCode(`Move ${fmt(amt)} from ${from.type} to ${to.type}.`, () => {
+    if (Backend.enabled) return serverMove({ kind: 'transfer', from: fromId, to: toId, amount: amt, desc: memo }, `Done — ${fmt(amt)} moved to ${to.type}.`);
     const date = todayStr();
     from.balance = +(from.balance - amt).toFixed(2);
     to.balance = +(to.balance + amt).toFixed(2);
@@ -888,6 +1018,7 @@ function submitDomesticTransfer(e) {
 
   requireCode(`Send ${fmt(amt)} to ${name} at ${bank} (account ending ${acctNo.slice(-4)})${fee ? ` plus a ${fmt(fee)} wire fee` : ''}.`, () => {
     const label = speed === 'wire' ? 'Domestic wire' : 'ACH transfer';
+    if (Backend.enabled) return serverMove(sendArgs(from, amt, `${label} to ${name} (${bank} ••••${acctNo.slice(-4)})${memo ? ' — ' + memo : ''}`, 'Domestic', fee, 'Domestic wire fee'), `${label} of ${fmt(amt)} to ${esc(name)} has been submitted.`);
     debitAccount(from, amt, `${label} to ${name} (${bank} ••••${acctNo.slice(-4)})${memo ? ' — ' + memo : ''}`, 'Domestic', fee, 'Domestic wire fee');
     saveState();
     flash(`${label} of ${fmt(amt)} to ${esc(name)} has been submitted.`);
@@ -910,6 +1041,7 @@ function submitInternationalTransfer(e) {
   if (total > from.balance) return showErr('intl-error', `Insufficient funds — this wire plus the $${WIRE_FEE} fee comes to ${fmt(total)}.`);
 
   requireCode(`Wire ${fmt(amt)} to ${name} in ${country}, plus a ${fmt(WIRE_FEE)} fee.`, () => {
+    if (Backend.enabled) return serverMove(sendArgs(from, amt, `Wire to ${name} (${country})${purpose ? ' — ' + purpose : ''}`, 'International', WIRE_FEE, 'International wire fee'), `Wire of ${fmt(amt)} to ${esc(name)} has been submitted.`);
     debitAccount(from, amt, `Wire to ${name} (${country})${purpose ? ' — ' + purpose : ''}`, 'International', WIRE_FEE, 'International wire fee');
     saveState();
     flash(`Wire of ${fmt(amt)} to ${esc(name)} has been submitted.`);
@@ -966,6 +1098,7 @@ function submitZelle(e) {
 
   const who = name || to;
   requireCode(`Send ${fmt(amt)} with Zelle® to ${who}.`, () => {
+    if (Backend.enabled) return serverMove(sendArgs(from, amt, `Zelle to ${who}${memo ? ' — ' + memo : ''}`, 'Zelle'), `${fmt(amt)} sent to ${esc(who)} with Zelle®.`);
     debitAccount(from, amt, `Zelle to ${who}${memo ? ' — ' + memo : ''}`, 'Zelle');
     saveState();
     flash(`${fmt(amt)} sent to ${esc(who)} with Zelle®.`);
@@ -1013,6 +1146,7 @@ function submitBill(e) {
   if (amt > from.balance) return showErr('bp-error', `Insufficient funds in ${from.type}.`);
 
   requireCode(`Pay ${fmt(amt)} to ${payee}.`, () => {
+    if (Backend.enabled) return serverMove(sendArgs(from, amt, `Bill payment — ${payee} (${ref})`, 'Bills'), `${fmt(amt)} paid to ${esc(payee)}.`);
     debitAccount(from, amt, `Bill payment — ${payee} (${ref})`, 'Bills');
     saveState();
     flash(`${fmt(amt)} paid to ${esc(payee)}.`);
@@ -1054,6 +1188,7 @@ function submitDeposit(e) {
   const amt = parseFloat(document.getElementById('dp-amt').value);
   hideErr('dp-error');
   if (!amt || amt <= 0) return showErr('dp-error', 'Enter an amount greater than $0.');
+  if (Backend.enabled) return serverMove({ kind: 'deposit', to: to.id, amount: amt, desc: 'Mobile check deposit', cat: 'Deposit' }, `${fmt(amt)} deposited to ${esc(to.type)}.`);
   to.balance = +(to.balance + amt).toFixed(2);
   to.transactions.unshift({ id: newTxId(), date: todayStr(), desc: 'Mobile check deposit', cat: 'Deposit', amount: amt });
   saveState();
@@ -1243,7 +1378,22 @@ function handleOpenAccount(e) {
   const username = document.getElementById('oa-username').value.trim();
   const password = document.getElementById('oa-password').value;
 
+  if (Backend.enabled) {
+    Backend.signUp({ name, email, username, password }).then(r => {
+      if (r.error) {
+        unameErrEl.textContent = r.error;
+        unameErrEl.classList.remove('hide');
+        refreshCaptcha();
+        return;
+      }
+      document.getElementById('open-account-form').classList.add('hide');
+      document.getElementById('open-account-success').classList.remove('hide');
+    });
+    return;
+  }
+
   if (state.customers.some(c => c.username.toLowerCase() === username.toLowerCase())) {
+    unameErrEl.textContent = 'That username is already taken.';
     unameErrEl.classList.remove('hide');
     refreshCaptcha();
     return;
@@ -1282,6 +1432,20 @@ function handleAdminLogin(e) {
   const p = document.getElementById('admin-pass').value;
   const errEl = document.getElementById('admin-login-error');
 
+  if (Backend.enabled) {
+    Backend.adminLogin(u, p).then(async r => {
+      if (r.error) { errEl.textContent = r.error; errEl.classList.remove('hide'); return; }
+      try {
+        state.customers = await Backend.adminLoad();
+        markAdminSaved();
+        sessionStorage.setItem('waypoint-admin-authed', '1');
+      } catch (err) { errEl.textContent = 'Signed in, but could not load customers: ' + Backend.nice(err); errEl.classList.remove('hide'); return; }
+      errEl.classList.add('hide');
+      location.hash = '#/admin';
+    });
+    return;
+  }
+
   if (u === ADMIN_USER && p === ADMIN_PASS) {
     try { sessionStorage.setItem('waypoint-admin-authed', '1'); } catch (e) {}
     errEl.classList.add('hide');
@@ -1292,6 +1456,7 @@ function handleAdminLogin(e) {
 }
 
 function adminLogout() {
+  if (Backend.enabled) { Backend.adminLogout(); state.customers = []; }
   try { sessionStorage.removeItem('waypoint-admin-authed'); } catch (e) {}
   location.hash = '#/';
 }
@@ -1302,9 +1467,24 @@ let adminEditing = false;
 let adminIssuing = false;
 let adminNotice = '';
 
-function adminGoList()  { adminView = 'list';  adminSelectedId = null; adminEditing = false; adminIssuing = false; renderAdmin(); }
+function adminGoList()  { adminView = 'list';  adminSelectedId = null; adminEditing = false; adminIssuing = false; renderAdmin(); if (Backend.enabled) adminReload(); }
+
+/* Remote mode: re-read every customer (their transfers change balances while the admin is looking). */
+async function adminReload(quiet) {
+  if (!Backend.enabled || !adminActive()) return;
+  try {
+    const rows = await Backend.adminLoad();
+    if (saveTimer) return;                      // don't overwrite edits that haven't been saved yet
+    state.customers = rows;
+    markAdminSaved();
+    if (!quiet && adminView === 'list') renderAdminList();
+  } catch (err) { toast('Could not refresh customers: ' + Backend.nice(err)); }
+}
 function adminGoAdd()   { adminView = 'add';   renderAdmin(); }
-function adminGoDetail(id, editing) { adminView = 'detail'; adminSelectedId = id; adminEditing = !!editing; adminIssuing = false; adminNotice = ''; renderAdmin(); }
+async function adminGoDetail(id, editing) {
+  if (Backend.enabled) await adminReload(true);    // open the customer with their latest server data
+  adminView = 'detail'; adminSelectedId = id; adminEditing = !!editing; adminIssuing = false; adminNotice = ''; renderAdmin();
+}
 function adminStartEdit(id) { adminEditing = true; renderAdminDetail(id); }
 function adminCancelEdit(id) { adminEditing = false; renderAdminDetail(id); }
 
@@ -1322,6 +1502,7 @@ function renderAdminList() {
       <div><h1>Admin — customers</h1><div class="sub">${state.customers.length} registered customers</div></div>
       <div style="display:flex; gap:10px;">
         <button class="btn btn-brass btn-sm" onclick="adminGoAdd()">+ Add customer</button>
+        ${Backend.enabled ? '<button class="btn btn-ghost btn-sm" onclick="adminReload()">↻ Refresh</button>' : ''}
         <button class="btn btn-ghost btn-sm" onclick="adminLogout()">Log out</button>
       </div>
     </div>
@@ -1395,7 +1576,17 @@ function handleAddCustomer(e) {
     return;
   }
 
-  function finish(photo) {
+  async function finish(photo) {
+    if (Backend.enabled) {
+      const errEl = document.getElementById('admin-new-error');
+      const draft = buildCustomer({ name, username, email, password, photo, startingBalance, status: 'approved', phone, dob, address, transferCode });
+      try {
+        await Backend.adminCall('create', { password, customer: Object.assign(Backend.toRow(draft), { access_code: transferCode }) });
+      } catch (err) { errEl.textContent = err.message; errEl.classList.remove('hide'); return; }
+      try { state.customers = await Backend.adminLoad(); markAdminSaved(); } catch (err) {}
+      adminGoList();
+      return;
+    }
     createCustomer({ name, username, email, password, photo, startingBalance, status: 'approved', phone, dob, address, transferCode });
     saveState();
     adminGoList();
@@ -1694,9 +1885,13 @@ function adminApproveCustomer(id) {
   renderAdminDetail(id);
 }
 
-function adminRejectCustomer(id) {
+async function adminRejectCustomer(id) {
   if (!confirm('Reject and delete this application? This cannot be undone.')) return;
+  if (Backend.enabled) {
+    try { await Backend.adminCall('delete', { id }); } catch (err) { toast(err.message); return; }
+  }
   state.customers = state.customers.filter(c => c.id !== id);
+  delete lastSaved[id];
   saveState();
   adminGoList();
 }
@@ -1723,11 +1918,17 @@ function submitEditCustomer(e, custId) {
   }
   errEl.classList.add('hide');
 
-  function finish(photo) {
+  async function finish(photo) {
+    if (Backend.enabled) {
+      try {
+        if (username !== c.username) await Backend.adminCall('set_username', { id: c.id, username });
+        if (newPass) await Backend.adminCall('set_password', { id: c.id, password: newPass });
+      } catch (err) { errEl.textContent = err.message; errEl.classList.remove('hide'); return; }
+    }
     c.name = name; c.username = username; c.email = email;
     c.phone = phone; c.dob = dob; c.address = address; c.transferCode = code;
     if (since) c.memberSince = since;
-    if (newPass) c.password = newPass;
+    if (newPass && !Backend.enabled) c.password = newPass;
     if (photo) c.photo = photo;
     c.cards.forEach(card => { card.holder = name; }); // keep card names in sync
 
@@ -1820,8 +2021,15 @@ function adminToggleFreeze(custId, cardId) {
   renderAdminDetail(custId);
 }
 
-function adminDeleteCustomer(id) {
+async function adminDeleteCustomer(id) {
   if (!confirm('Delete this customer? This cannot be undone.')) return;
+  if (Backend.enabled) {
+    try { await Backend.adminCall('delete', { id }); } catch (err) { toast(err.message); return; }
+    state.customers = state.customers.filter(c => c.id !== id);
+    delete lastSaved[id];
+    adminGoList();
+    return;
+  }
   state.customers = state.customers.filter(c => c.id !== id);
   if (!state.customers.length) state.customers = seedState().customers;
   if (state.currentCustomerId === id) state.currentCustomerId = state.customers[0].id;
@@ -1831,6 +2039,11 @@ function adminDeleteCustomer(id) {
 
 /* ---------------- Init ---------------- */
 loadState();
+if (Backend.enabled) {
+  const lbl = document.querySelector('label[for="admin-user"]');
+  if (lbl) lbl.textContent = 'Admin email';
+  const si = document.getElementById('admin-user'); if (si) si.type = 'email';
+}
 /* Suspension guard: once logged in, any click or form submit re-checks the account status. */
 ['click', 'submit'].forEach(type => {
   document.addEventListener(type, e => {
@@ -1845,4 +2058,32 @@ window.addEventListener('storage', e => {
   }
 });
 window.addEventListener('hashchange', routeFromHash);
-routeFromHash();
+
+/* Remote mode: pick up an existing session (page refresh) before drawing the first screen. */
+async function restoreRemote() {
+  try {
+    if (location.hash.startsWith('#/admin')) {
+      if (await Backend.adminRestore()) {
+        try { sessionStorage.setItem('waypoint-admin-authed', '1'); } catch (e) {}
+        state.customers = await Backend.adminLoad();
+        markAdminSaved();
+      } else {
+        try { sessionStorage.removeItem('waypoint-admin-authed'); } catch (e) {}
+      }
+    } else {
+      const mine = await Backend.loadMine();
+      if (mine) { adoptMine(mine); startRemoteWatch(mine.id); }
+    }
+  } catch (err) { console.warn('Could not restore session', err); }
+}
+if (Backend.enabled) {
+  restoreRemote().then(routeFromHash);
+  // Fallback if realtime is unavailable: re-check the account every 10 seconds.
+  setInterval(async () => {
+    if (adminActive() || !(appVisible() || location.hash === '#/suspended')) return;
+    await refreshMine();
+    if (!enforceSuspension() && location.hash === '#/suspended') renderSuspended();
+  }, 10000);
+} else {
+  routeFromHash();
+}
