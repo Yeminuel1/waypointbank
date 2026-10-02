@@ -91,7 +91,7 @@ function esc(v) {
 /* ---------------- Account status: active / suspended / on hold ---------------- */
 const BANK_PHONE = '(240) 242-7078';
 const BANK_PHONE_HREF = 'tel:+12402427078';
-const BANK_EMAIL = 'support@waypoint.com';
+const BANK_EMAIL = 'support@waypointcom.online';
 const DEFAULT_SUSPEND_MSG = 'Your account has been suspended. You can\'t sign in to banking, make transfers or payments until the suspension is lifted. Please contact the bank to have it lifted.';
 const DEFAULT_HOLD_MSG = 'A hold has been placed on your account. Transfers and payments are unavailable while it is in place. Please contact the bank so it can be reviewed and lifted.';
 
@@ -1488,10 +1488,35 @@ function handleOpenAccount(e) {
 }
 
 /* ---------------- Contact form ---------------- */
-function handleContact(e) {
+async function handleContact(e) {
   e.preventDefault();
-  document.getElementById('contact-form').classList.add('hide');
-  document.getElementById('contact-success').classList.remove('hide');
+  const btn = document.getElementById('contact-submit');
+  const err = document.getElementById('contact-error');
+  err.classList.add('hide');
+  const payload = {
+    name: document.getElementById('ct-name').value.trim(),
+    email: document.getElementById('ct-email').value.trim(),
+    subject: document.getElementById('ct-subject').value.trim(),
+    message: document.getElementById('ct-message').value.trim(),
+    website: document.getElementById('ct-website').value  // honeypot, must stay empty
+  };
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    const res = await fetch('/api/contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+    document.getElementById('contact-form').classList.add('hide');
+    document.getElementById('contact-success').classList.remove('hide');
+  } catch (ex) {
+    err.textContent = (ex && ex.message ? ex.message : 'Something went wrong.') + ' You can also email ' + BANK_EMAIL + ' directly.';
+    err.classList.remove('hide');
+    btn.disabled = false; btn.textContent = label;
+  }
 }
 
 /* ---------------- Admin ----------------
