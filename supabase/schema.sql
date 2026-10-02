@@ -1,6 +1,6 @@
 -- ============================================================
 -- Waypoint — Supabase schema
--- Run this once in: Supabase Dashboard → SQL Editor → New query
+-- Run in: Supabase Dashboard → SQL Editor → New query (if the editor complains, run it in parts)
 -- ============================================================
 
 -- People allowed to use the admin panel (they sign in with a normal Supabase email + password)
@@ -28,9 +28,9 @@ create table if not exists public.customer_secrets (
 
 -- ---------- helper: is the caller an admin? ----------
 create or replace function public.is_admin() returns boolean
-language sql security definer stable set search_path = public as $$
+language sql security definer stable set search_path = public as $fn$
   select exists (select 1 from public.admins where user_id = auth.uid());
-$$;
+$fn$;
 
 -- ---------- row level security ----------
 alter table public.admins enable row level security;
@@ -54,24 +54,23 @@ create policy secrets_admin_all on public.customer_secrets for all using (public
 -- accounts are always kept as stored, and for cards only the "frozen" switch is accepted.
 -- Refused unless the account is active, so suspended or held customers cannot change anything.
 create or replace function public.save_my_data(p_data jsonb) returns void
-language plpgsql security definer set search_path = public as $$
-declare c public.customers%rowtype; newcards jsonb;
+language plpgsql security definer set search_path = public as $fn$
+declare c public.customers; newcards jsonb;
 begin
-  select * into c from public.customers where id = auth.uid() and status = 'approved' for update;
-  if not found then raise exception 'Account is not active'; end if;
-  select coalesce(jsonb_agg(
+  c := (select t from public.customers t where t.id = auth.uid() and t.status = 'approved' for update);
+  if c.id is null then raise exception 'Account is not active'; end if;
+  newcards := (select coalesce(jsonb_agg(
            case when n.card ? 'frozen' then jsonb_set(o.card, '{frozen}', n.card->'frozen') else o.card end
            order by o.ord), '[]'::jsonb)
-    into newcards
     from jsonb_array_elements(coalesce(c.data->'cards', '[]'::jsonb)) with ordinality as o(card, ord)
     left join lateral (
       select x as card from jsonb_array_elements(coalesce(p_data->'cards', '[]'::jsonb)) x
-       where x->>'id' = o.card->>'id' limit 1) n on true;
+       where x->>'id' = o.card->>'id' limit 1) n on true);
   update public.customers
      set data = jsonb_set(jsonb_set(p_data, '{accounts}', coalesce(c.data->'accounts', '[]'::jsonb)), '{cards}', newcards),
          updated_at = now()
    where id = c.id;
-end $$;
+end $fn$;
 
 -- Move money. The ONLY way a customer's balance changes. Everything is checked here, not in the browser:
 -- account is active, access code is right, accounts belong to the caller, enough funds, fees and limits.
@@ -82,9 +81,9 @@ create or replace function public.do_move(
   p_kind text, p_from text, p_to text, p_amount numeric, p_fee numeric,
   p_desc text, p_cat text, p_fee_desc text, p_code text
 ) returns jsonb
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $fn$
 declare
-  c public.customers%rowtype;
+  c public.customers;
   accts jsonb; i int; fi int := -1; ti int := -1;
   amt numeric := round(coalesce(p_amount, 0), 2);
   fee numeric := round(coalesce(p_fee, 0), 2);
@@ -92,10 +91,10 @@ declare
   today text := to_char(current_date, 'YYYY-MM-DD');
   fbal numeric; tbal numeric; ftype text; ttype text; fx jsonb; tx jsonb;
 begin
-  select * into c from public.customers where id = auth.uid() and status = 'approved' for update;
-  if not found then raise exception 'Account is not active'; end if;
+  c := (select t from public.customers t where t.id = auth.uid() and t.status = 'approved' for update);
+  if c.id is null then raise exception 'Account is not active'; end if;
   if p_kind not in ('transfer', 'send', 'deposit') then raise exception 'Unknown operation'; end if;
-  if amt <= 0 then raise exception 'Enter an amount greater than $0.'; end if;
+  if amt <= 0 then raise exception 'Enter an amount greater than zero.'; end if;
 
   if p_kind <> 'deposit' and not exists (
     select 1 from public.customer_secrets s
@@ -107,11 +106,11 @@ begin
     if p_cat = 'International' then fee := 15;
     elsif p_cat = 'Domestic' then if fee not in (0, 25) then raise exception 'Invalid fee'; end if;
     else fee := 0; end if;
-    if p_cat = 'Zelle' and amt > 2500 then raise exception 'Zelle payments are limited to $2,500 per transaction.'; end if;
+    if p_cat = 'Zelle' and amt > 2500 then raise exception 'Zelle payments are limited to 2,500 USD per transaction.'; end if;
   else
     fee := 0;
   end if;
-  if p_kind = 'deposit' and amt > 10000 then raise exception 'Mobile deposits are limited to $10,000.'; end if;
+  if p_kind = 'deposit' and amt > 10000 then raise exception 'Mobile deposits are limited to 10,000 USD.'; end if;
 
   accts := coalesce(c.data->'accounts', '[]'::jsonb);
   for i in 0 .. jsonb_array_length(accts) - 1 loop
@@ -132,9 +131,9 @@ begin
 
   if p_kind = 'transfer' then
     fx := jsonb_build_object('id', 'tx_' || substr(md5(random()::text || clock_timestamp()::text), 1, 12), 'date', today, 'cat', 'Transfer', 'amount', -amt,
-            'desc', 'Transfer to ' || ttype || case when d <> '' then ' — ' || d else '' end);
+            'desc', 'Transfer to ' || ttype || case when d <> '' then ' - ' || d else '' end);
     tx := jsonb_build_object('id', 'tx_' || substr(md5(random()::text || clock_timestamp()::text), 1, 12), 'date', today, 'cat', 'Transfer', 'amount', amt,
-            'desc', 'Transfer from ' || ftype || case when d <> '' then ' — ' || d else '' end);
+            'desc', 'Transfer from ' || ftype || case when d <> '' then ' - ' || d else '' end);
     accts := jsonb_set(accts, array[fi::text, 'balance'], to_jsonb(round(fbal - amt, 2)));
     accts := jsonb_set(accts, array[fi::text, 'transactions'], jsonb_build_array(fx) || coalesce(accts->fi->'transactions', '[]'::jsonb));
     accts := jsonb_set(accts, array[ti::text, 'balance'], to_jsonb(round(tbal + amt, 2)));
@@ -159,24 +158,24 @@ begin
 
   update public.customers set data = jsonb_set(c.data, '{accounts}', accts), updated_at = now() where id = c.id;
   return accts;
-end $$;
+end $fn$;
 
 -- Is the access/transfer code I typed correct?
 create or replace function public.check_access_code(p_code text) returns boolean
-language sql security definer stable set search_path = public as $$
+language sql security definer stable set search_path = public as $fn$
   select exists (
     select 1 from public.customer_secrets s
     join public.customers c on c.id = s.customer_id
     where s.customer_id = auth.uid() and c.status = 'approved'
       and s.access_code <> '' and s.access_code = p_code
   );
-$$;
+$fn$;
 
 -- Has the bank set a code for me yet?
 create or replace function public.has_access_code() returns boolean
-language sql security definer stable set search_path = public as $$
+language sql security definer stable set search_path = public as $fn$
   select exists (select 1 from public.customer_secrets where customer_id = auth.uid() and access_code <> '');
-$$;
+$fn$;
 
 grant execute on function public.save_my_data(jsonb) to authenticated;
 grant execute on function public.do_move(text,text,text,numeric,numeric,text,text,text,text) to authenticated;
@@ -186,7 +185,7 @@ grant execute on function public.has_access_code() to authenticated;
 -- ---------- new sign-ups become 'pending' customers ----------
 -- Runs when someone uses "Open an account". Admin accounts (no username metadata) are skipped.
 create or replace function public.handle_new_user() returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public as $fn$
 declare
   uname text := new.raw_user_meta_data->>'username';
   nm text := coalesce(nullif(new.raw_user_meta_data->>'name',''), 'New Member');
@@ -211,13 +210,13 @@ begin
         'expiry', '12/29', 'frozen', false))
     ));
   return new;
-end $$;
+end $fn$;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.handle_new_user();
 
 -- ---------- realtime: lets a signed-in customer's screen react the moment the admin suspends them ----------
-do $$ begin
+do $fn$ begin
   alter publication supabase_realtime add table public.customers;
-exception when duplicate_object then null; end $$;
+exception when duplicate_object then null; end $fn$;
