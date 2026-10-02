@@ -31,6 +31,19 @@ npx serve .
 
 Every push to `main` will auto-redeploy.
 
+## Contact form email
+
+The Contact page posts to `api/contact.js` (a Vercel serverless function), which emails every message to
+`support@waypointcom.online` through [Resend](https://resend.com). The visitor's address is set as Reply-To,
+so replying answers them directly.
+
+1. Create a free Resend account and **Domains → Add domain** `waypointcom.online`; add the DNS records it shows
+   at your registrar and wait for it to verify.
+2. **API Keys → Create** a key.
+3. In Vercel: **Project → Settings → Environment Variables**, add `RESEND_API_KEY` = your key, then redeploy.
+   (Optional: `CONTACT_TO` and `CONTACT_FROM` override the recipient and sender.)
+4. `support@waypointcom.online` must be a real mailbox (Google Workspace, Zoho Mail, etc.) to receive the messages.
+
 ## Structure
 
 ```
@@ -39,6 +52,7 @@ css/style.css                       all styles
 js/script.js                        app logic (routing, state, rendering)
 js/backend.js                       Supabase layer (unused in demo mode)
 js/config.js                        Supabase URL + anon key
+api/contact.js                      contact form -> email (Vercel function)
 supabase/schema.sql                 database tables, security rules, functions
 supabase/functions/admin-users/     edge function for admin-only actions
 vercel.json                         serves index.html for every route
