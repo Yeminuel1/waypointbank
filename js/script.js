@@ -3,30 +3,31 @@
    Multiple customers live under state.customers; state.currentCustomerId
    is whoever is logged into the member-facing app right now.
    ============================================================ */
-const STORAGE_KEY = 'waypoint-state-v2';
+const STORAGE_KEY = 'waypoint-state-v3';
 
 function seedState() {
   const alex = {
-    id: 'cust_alex', name: 'Alex Morgan', username: 'alexmorgan', email: 'alex@waypoint-demo.com', photo: null,
+    id: 'cust_alex', name: 'Alex Morgan', username: 'alexmorgan', password: 'alex2026', status: 'approved', email: 'alex@waypoint-demo.com', photo: null,
+    phone: '(555) 014-2281', dob: '1988-04-12', address: '214 Harbor Street, Apt 5B, Portland, ME 04101', transferCode: '482915', memberSince: '2019-03-08',
     accounts: [
       {
         id: 'chk', type: 'Everyday Checking', number: '••••4821', balance: 4382.10,
         transactions: [
-          { date: '2026-09-19', desc: 'Paycheck deposit', cat: 'Income', amount: 2140.00 },
-          { date: '2026-09-18', desc: 'Harborline Grocery', cat: 'Groceries', amount: -64.32 },
-          { date: '2026-09-16', desc: 'Riverside Coffee Co.', cat: 'Dining', amount: -6.75 },
-          { date: '2026-09-15', desc: 'Transfer to Savings', cat: 'Transfer', amount: -300.00 },
-          { date: '2026-09-12', desc: 'Northline Electric', cat: 'Utilities', amount: -88.40 },
-          { date: '2026-09-08', desc: 'Waypoint ATM Withdrawal', cat: 'Cash', amount: -60.00 },
+          { id: 'tx1', date: '2026-09-19', desc: 'Paycheck deposit', cat: 'Income', amount: 2140.00 },
+          { id: 'tx2', date: '2026-09-18', desc: 'Harborline Grocery', cat: 'Groceries', amount: -64.32 },
+          { id: 'tx3', date: '2026-09-16', desc: 'Riverside Coffee Co.', cat: 'Dining', amount: -6.75 },
+          { id: 'tx4', date: '2026-09-15', desc: 'Transfer to Savings', cat: 'Transfer', amount: -300.00 },
+          { id: 'tx5', date: '2026-09-12', desc: 'Northline Electric', cat: 'Utilities', amount: -88.40 },
+          { id: 'tx6', date: '2026-09-08', desc: 'Waypoint ATM Withdrawal', cat: 'Cash', amount: -60.00 },
         ]
       },
       {
         id: 'sav', type: 'Foundation Savings', number: '••••1092', balance: 18650.44,
         transactions: [
-          { date: '2026-09-15', desc: 'Transfer from Checking', cat: 'Transfer', amount: 300.00 },
-          { date: '2026-09-01', desc: 'Monthly interest', cat: 'Interest', amount: 22.14 },
-          { date: '2026-08-15', desc: 'Transfer from Checking', cat: 'Transfer', amount: 300.00 },
-          { date: '2026-08-01', desc: 'Monthly interest', cat: 'Interest', amount: 21.98 },
+          { id: 'tx7', date: '2026-09-15', desc: 'Transfer from Checking', cat: 'Transfer', amount: 300.00 },
+          { id: 'tx8', date: '2026-09-01', desc: 'Monthly interest', cat: 'Interest', amount: 22.14 },
+          { id: 'tx9', date: '2026-08-15', desc: 'Transfer from Checking', cat: 'Transfer', amount: 300.00 },
+          { id: 'tx10', date: '2026-08-01', desc: 'Monthly interest', cat: 'Interest', amount: 21.98 },
         ]
       }
     ],
@@ -37,14 +38,15 @@ function seedState() {
   };
 
   const jordan = {
-    id: 'cust_jordan', name: 'Jordan Lee', username: 'jordanlee', email: 'jordan@waypoint-demo.com', photo: null,
+    id: 'cust_jordan', name: 'Jordan Lee', username: 'jordanlee', password: 'jordan2026', status: 'approved', email: 'jordan@waypoint-demo.com', photo: null,
+    phone: '(555) 019-7734', dob: '1994-11-02', address: '88 Maple Avenue, Burlington, VT 05401', transferCode: '730264', memberSince: '2022-06-21',
     accounts: [
       {
         id: 'cust_jordan_chk', type: 'Everyday Checking', number: '••••2256', balance: 1180.55,
         transactions: [
-          { date: '2026-09-20', desc: 'Paycheck deposit', cat: 'Income', amount: 1450.00 },
-          { date: '2026-09-17', desc: 'Riverside Coffee Co.', cat: 'Dining', amount: -5.25 },
-          { date: '2026-09-10', desc: 'Northline Electric', cat: 'Utilities', amount: -64.10 },
+          { id: 'tx11', date: '2026-09-20', desc: 'Paycheck deposit', cat: 'Income', amount: 1450.00 },
+          { id: 'tx12', date: '2026-09-17', desc: 'Riverside Coffee Co.', cat: 'Dining', amount: -5.25 },
+          { id: 'tx13', date: '2026-09-10', desc: 'Northline Electric', cat: 'Utilities', amount: -64.10 },
         ]
       }
     ],
@@ -63,10 +65,82 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.customers) && parsed.customers.length) { state = parsed; return; }
+      if (parsed && Array.isArray(parsed.customers) && parsed.customers.length) { state = parsed; normalizeState(); return; }
     }
   } catch (e) { console.warn('Could not read saved demo state', e); }
   state = seedState();
+}
+
+/* Older saved data may be missing the newer profile / code fields. */
+function normalizeState() {
+  const seeded = {};
+  seedState().customers.forEach(c => { seeded[c.id] = c; });
+  state.customers.forEach(c => {
+    const d = seeded[c.id] || {};
+    ['phone','dob','address','memberSince'].forEach(k => { if (c[k] === undefined) c[k] = d[k] || ''; });
+    if (c.transferCode === undefined) c.transferCode = d.transferCode || '';
+    if (c.suspendMessage === undefined) c.suspendMessage = '';
+  });
+}
+
+function esc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+}
+
+/* ---------------- Account status: active / suspended / on hold ---------------- */
+const BANK_PHONE = '(240) 242-7078';
+const BANK_PHONE_HREF = 'tel:+12402427078';
+const BANK_EMAIL = 'support@waypoint.com';
+const DEFAULT_SUSPEND_MSG = 'Your account has been suspended. You can\'t sign in to banking, make transfers or payments until the suspension is lifted. Please contact the bank to have it lifted.';
+const DEFAULT_HOLD_MSG = 'A hold has been placed on your account. Transfers and payments are unavailable while it is in place. Please contact the bank so it can be reviewed and lifted.';
+
+function isRestricted(c) { return !!c && (c.status === 'suspended' || c.status === 'hold'); }
+
+function statusBadge(c) {
+  const base = 'class="tx-cat" style="';
+  if (c.status === 'pending') return `<span ${base}color:var(--rust); border-color:var(--rust);">Pending</span>`;
+  if (c.status === 'suspended') return `<span ${base}color:#fff; background:var(--rust); border-color:var(--rust);">Suspended</span>`;
+  if (c.status === 'hold') return `<span ${base}color:#241a0c; background:var(--brass-bright); border-color:var(--brass);">On hold</span>`;
+  return `<span class="tx-cat">Active</span>`;
+}
+
+/* Reads the latest saved data (the admin may have changed something in another tab). */
+function readStored() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) { const p = JSON.parse(raw); if (p && Array.isArray(p.customers)) return p; }
+  } catch (e) {}
+  return null;
+}
+function reloadFromStorage() {
+  const p = readStored();
+  if (p && p.customers.length) { state.customers = p.customers; normalizeState(); }
+}
+/* Light-weight sync that keeps object references intact: status + message only. */
+function syncStatuses() {
+  const p = readStored();
+  if (!p) return;
+  p.customers.forEach(sc => {
+    const mine = state.customers.find(c => c.id === sc.id);
+    if (mine) { mine.status = sc.status; mine.suspendMessage = sc.suspendMessage || ''; }
+  });
+}
+
+function appVisible() { return !document.getElementById('app-view').classList.contains('hide'); }
+
+/* If the logged-in customer has been suspended / put on hold, kick them to the suspension page. */
+function enforceSuspension() {
+  if (!appVisible()) return false;
+  syncStatuses();
+  const c = getCurrentCustomer();
+  if (!isRestricted(c)) return false;
+  try {
+    sessionStorage.setItem('waypoint-suspended', c.id);
+    sessionStorage.removeItem('waypoint-verified');
+  } catch (e) {}
+  if (typeof closeCodeModal === 'function') closeCodeModal();
+  location.hash = '#/suspended';
+  return true;
 }
 
 function saveState() {
@@ -122,15 +196,24 @@ function cardMarkup(c) {
   `;
 }
 
-/* Creates a new customer record: one checking account + one debit card. */
-function createCustomer({ name, username, email, photo, startingBalance }) {
+function newTxId() { return 'tx_' + Date.now() + '_' + Math.floor(Math.random() * 10000); }
+
+/* Creates a new customer record: one checking account + one debit card.
+   status 'approved' can log in immediately; 'pending' needs an admin to approve it first. */
+function createCustomer({ name, username, email, password, photo, startingBalance, status, phone, address, dob, transferCode }) {
   const id = 'cust_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
   const acctNum = '••••' + String(1000 + Math.floor(Math.random() * 9000));
   const cardNum = String(1000 + Math.floor(Math.random() * 9000));
   const customer = {
     id, name, email: email || '',
     username: (username || name.toLowerCase().replace(/\s+/g, '')),
+    password: password || '',
+    status: status || 'pending',
     photo: photo || null,
+    phone: phone || '', address: address || '', dob: dob || '',
+    transferCode: transferCode || '',
+    suspendMessage: '',
+    memberSince: new Date().toISOString().slice(0, 10),
     accounts: [{ id: id + '_chk', type: 'Everyday Checking', number: acctNum, balance: startingBalance || 0, transactions: [] }],
     cards: [{ id: id + '_debit', kind: 'Debit', label: 'Everyday Checking Debit', number: cardNum, holder: name, expiry: '12/29', frozen: false }]
   };
@@ -140,7 +223,7 @@ function createCustomer({ name, username, email, photo, startingBalance }) {
 
 /* ---------------- View switching (public / login / app) ---------------- */
 function showOnly(id) {
-  ['public-view','login-view','app-view'].forEach(v => {
+  ['public-view','login-view','verify-view','suspended-view','app-view'].forEach(v => {
     document.getElementById(v).classList.toggle('hide', v !== id);
   });
   window.scrollTo(0,0);
@@ -152,24 +235,188 @@ function showPublicPage(name) {
     el.classList.toggle('hide', el.id !== 'page-' + name);
   });
   window.scrollTo(0,0);
-  if (name === 'open-account') generateCaptcha();
+  if (name === 'open-account') {
+    generateCaptcha();
+    const form = document.getElementById('open-account-form');
+    const success = document.getElementById('open-account-success');
+    if (form) form.classList.remove('hide');
+    if (success) success.classList.add('hide');
+  }
+}
+
+/* Two-step sign-in: username + password, then the personal access code the bank set for you. */
+function getVerifiedId() {
+  try { return sessionStorage.getItem('waypoint-verified'); } catch (e) { return null; }
+}
+function getPendingId() {
+  try { return sessionStorage.getItem('waypoint-pending'); } catch (e) { return null; }
 }
 
 function handleLogin(e) {
   e.preventDefault();
   const uname = document.getElementById('li-user').value.trim().toLowerCase();
+  const pass = document.getElementById('li-pass').value;
+  const errEl = document.getElementById('login-error');
+
+  reloadFromStorage();
   const match = state.customers.find(c => c.username.toLowerCase() === uname);
-  state.currentCustomerId = (match || state.customers[0]).id;
+
+  if (!match) {
+    errEl.textContent = 'No account found with that username.';
+    errEl.classList.remove('hide');
+    return;
+  }
+  if (match.status === 'pending') {
+    errEl.textContent = 'Your account is still pending admin approval.';
+    errEl.classList.remove('hide');
+    return;
+  }
+  if (match.password !== pass) {
+    errEl.textContent = 'Incorrect password.';
+    errEl.classList.remove('hide');
+    return;
+  }
+
+  errEl.classList.add('hide');
+  if (isRestricted(match)) {
+    try {
+      sessionStorage.setItem('waypoint-suspended', match.id);
+      sessionStorage.removeItem('waypoint-pending');
+      sessionStorage.removeItem('waypoint-verified');
+    } catch (err) {}
+    document.getElementById('li-pass').value = '';
+    location.hash = '#/suspended';
+    return;
+  }
+  try {
+    sessionStorage.setItem('waypoint-pending', match.id);
+    sessionStorage.removeItem('waypoint-verified');
+  } catch (err) {}
+  document.getElementById('li-pass').value = '';
+  location.hash = '#/verify';
+}
+
+function renderVerify() {
+  const cust = state.customers.find(c => c.id === getPendingId());
+  const el = document.getElementById('verify-card');
+  if (!cust) { location.hash = '#/login'; return; }
+  const noCode = !cust.transferCode;
+  el.innerHTML = `
+    <div class="brand" style="color:var(--text); margin-bottom:22px;"><span class="mark" style="background:var(--brass);"></span>Waypoint</div>
+    <div style="display:flex; flex-direction:column; align-items:center; text-align:center; margin-bottom:22px;">
+      ${avatarHTML(cust, 96)}
+      <h2 style="margin:16px 0 4px; font-size:1.5rem;">Welcome, ${esc(cust.name)}</h2>
+      <p style="margin:0; color:var(--text-soft); font-size:0.9rem;">Enter your access code to continue.</p>
+    </div>
+    ${noCode ? `
+      <div class="confirm-note" style="border-color:var(--rust); color:var(--rust); background:rgba(163,70,50,0.08);">
+        Your access code hasn't been set up yet. Please contact the bank so an administrator can set one for you.
+      </div>
+    ` : `
+      <form onsubmit="handleVerify(event)">
+        <div class="field"><label for="vf-code">Access code</label>
+          <input id="vf-code" class="code-input" type="password" inputmode="numeric" autocomplete="off" placeholder="••••••" required autofocus>
+        </div>
+        <div id="verify-error" class="hide" style="color:var(--rust); font-size:0.85rem; margin-bottom:14px;">That code isn't right. Please try again.</div>
+        <button type="submit" class="btn btn-primary btn-block">Continue</button>
+      </form>
+    `}
+    <p class="login-note"><a href="#/login" style="color:var(--moss);" onclick="cancelVerify()">Not ${esc(cust.name.split(' ')[0])}? Back to log in</a></p>
+  `;
+  const input = document.getElementById('vf-code');
+  if (input) setTimeout(() => input.focus(), 50);
+}
+
+function cancelVerify() {
+  try { sessionStorage.removeItem('waypoint-pending'); } catch (e) {}
+}
+
+function handleVerify(e) {
+  e.preventDefault();
+  const cust = state.customers.find(c => c.id === getPendingId());
+  if (!cust) { location.hash = '#/login'; return; }
+  const entered = document.getElementById('vf-code').value.trim();
+  if (!cust.transferCode || entered !== String(cust.transferCode)) {
+    document.getElementById('verify-error').classList.remove('hide');
+    document.getElementById('vf-code').value = '';
+    return;
+  }
+  try {
+    sessionStorage.setItem('waypoint-verified', cust.id);
+    sessionStorage.removeItem('waypoint-pending');
+  } catch (err) {}
+  state.currentCustomerId = cust.id;
   saveState();
   location.hash = '#/app/dashboard';
 }
+
+function renderSuspended() {
+  reloadFromStorage();
+  let id = null;
+  try { id = sessionStorage.getItem('waypoint-suspended'); } catch (e) {}
+  const cust = state.customers.find(c => c.id === id);
+  const el = document.getElementById('suspended-card');
+  if (!cust) { location.hash = '#/login'; return; }
+
+  const lockIcon = '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>';
+
+  if (!isRestricted(cust)) {
+    el.innerHTML = `
+      <div class="susp-icon ok">${lockIcon}</div>
+      <h2>Good news, ${esc(cust.name.split(' ')[0])}</h2>
+      <p class="susp-msg">The restriction on your account has been lifted. You can log in again.</p>
+      <a class="btn btn-primary btn-block" href="#/login" onclick="clearSuspendedSession()">Log in</a>`;
+    return;
+  }
+
+  const hold = cust.status === 'hold';
+  const msg = (cust.suspendMessage || '').trim() || (hold ? DEFAULT_HOLD_MSG : DEFAULT_SUSPEND_MSG);
+  el.innerHTML = `
+    <div class="susp-icon ${hold ? 'hold' : ''}">${lockIcon}</div>
+    <div class="susp-badge ${hold ? 'hold' : ''}">${hold ? 'On hold' : 'Suspended'}</div>
+    <h2>${hold ? 'Your account is on hold' : 'Your account is suspended'}</h2>
+    <div class="susp-who">${avatarHTML(cust, 36)}<span>${esc(cust.name)}</span></div>
+    <p class="susp-msg">${esc(msg).replace(/\n/g, '<br>')}</p>
+    <div class="susp-contact">
+      <div class="susp-contact-title">Contact the bank to lift this ${hold ? 'hold' : 'suspension'}</div>
+      <a class="btn btn-primary btn-block" href="${BANK_PHONE_HREF}">Call ${BANK_PHONE}</a>
+      <a class="btn btn-ghost btn-block" href="mailto:${BANK_EMAIL}?subject=${encodeURIComponent('Account ' + (hold ? 'hold' : 'suspension') + ' — ' + cust.username)}">Email ${BANK_EMAIL}</a>
+      <div class="susp-hours">Mon–Fri, 8am–7pm ET</div>
+    </div>
+    <button type="button" class="btn btn-ghost btn-block" style="margin-top:6px;" onclick="suspendedLeave()">Log out</button>
+  `;
+}
+function clearSuspendedSession() { try { sessionStorage.removeItem('waypoint-suspended'); } catch (e) {} }
+function suspendedLeave() { clearSuspendedSession(); logout(); }
+
 function logout() {
+  try {
+    sessionStorage.removeItem('waypoint-verified');
+    sessionStorage.removeItem('waypoint-pending');
+    sessionStorage.removeItem('waypoint-suspended');
+  } catch (e) {}
   location.hash = '#/';
 }
 
-function toggleMobileNav() {
-  document.getElementById('app-sidebar').classList.toggle('mobile-open');
+/* ---- Mobile layer: public drawer, "More" sheet, scroll lock ---- */
+function syncScrollLock() {
+  const more = document.getElementById('more-sheet'), drawer = document.getElementById('public-drawer');
+  const open = (more && !more.classList.contains('hide')) || (drawer && !drawer.classList.contains('hide'));
+  document.body.classList.toggle('no-scroll', !!open);
 }
+function togglePublicNav() {
+  const d = document.getElementById('public-drawer');
+  d.classList.toggle('hide');
+  syncScrollLock();
+}
+function closePublicNav() {
+  const d = document.getElementById('public-drawer');
+  if (d) d.classList.add('hide');
+  syncScrollLock();
+}
+function openMore() { document.getElementById('more-sheet').classList.remove('hide'); syncScrollLock(); }
+function closeMore() { const m = document.getElementById('more-sheet'); if (m) m.classList.add('hide'); syncScrollLock(); }
+const MORE_PAGES = ['zelle', 'bills', 'deposit', 'settings'];
 
 /* ---------------- Router ----------------
    Every page has its own real, shareable URL:
@@ -189,13 +436,22 @@ function toggleMobileNav() {
    #/app/accounts  accounts list
    #/app/accounts/:id   single account detail
    #/app/transfers transfers
+   #/app/zelle     Zelle
+   #/app/bills     bill pay
+   #/app/deposit   mobile check deposit
    #/app/cards     cards
+   #/app/settings  profile & security
+   #/verify        access-code step after login
+   #/suspended     shown instead of the app when an account is suspended / on hold
 ------------------------------------------- */
 let currentPage = 'dashboard';
 let currentAccountId = null;
 
 function routeFromHash() {
   const hash = location.hash || '#/';
+  closePublicNav();
+  closeMore();
+  if (typeof closeCodeModal === 'function') closeCodeModal();
 
   if (hash === '#/' || hash === '#') {
     showOnly('public-view');
@@ -208,15 +464,48 @@ function routeFromHash() {
     return;
   }
 
+  if (hash === '#/suspended') {
+    showOnly('suspended-view');
+    renderSuspended();
+    return;
+  }
+
+  if (hash === '#/verify') {
+    if (!getPendingId()) { location.hash = '#/login'; return; }
+    showOnly('verify-view');
+    renderVerify();
+    return;
+  }
+
   if (hash.startsWith('#/app')) {
+    const verifiedId = getVerifiedId();
+    if (!verifiedId) {
+      let suspId = null;
+      try { suspId = sessionStorage.getItem('waypoint-suspended'); } catch (e) {}
+      if (suspId) { location.hash = '#/suspended'; return; }
+      location.hash = '#/login'; return;
+    }
+    if (!state.customers.some(c => c.id === verifiedId)) { location.hash = '#/login'; return; }
+    reloadFromStorage();
+    if (!state.customers.some(c => c.id === verifiedId)) { location.hash = '#/login'; return; }
+    state.currentCustomerId = verifiedId;
+    if (isRestricted(getCurrentCustomer())) {
+      try { sessionStorage.setItem('waypoint-suspended', verifiedId); sessionStorage.removeItem('waypoint-verified'); } catch (e) {}
+      location.hash = '#/suspended';
+      return;
+    }
     const parts = hash.slice('#/app'.length).split('/').filter(Boolean);
     currentPage = parts[0] || 'dashboard';
     currentAccountId = parts[1] || null;
     const cust = getCurrentCustomer();
     document.getElementById('sidebar-who').innerHTML =
-      avatarHTML(cust, 34) + `<span style="color:var(--text-on-ink); font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${cust.name}</span>`;
+      avatarHTML(cust, 34) + `<span style="color:var(--text-on-ink); font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(cust.name)}</span>`;
     document.querySelectorAll('.app-nav .navlink').forEach(b => {
       b.classList.toggle('active', b.dataset.page === currentPage);
+    });
+    document.getElementById('app-topbar-who').innerHTML = avatarHTML(cust, 34);
+    document.querySelectorAll('.app-tabbar .tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.page === currentPage || (t.dataset.page === 'more' && MORE_PAGES.includes(currentPage)));
     });
     document.getElementById('app-sidebar').classList.remove('mobile-open');
     showOnly('app-view');
@@ -230,6 +519,7 @@ function routeFromHash() {
     showPublicPage('admin');
     adminView = 'list';
     adminSelectedId = null;
+    adminEditing = false;
     renderAdmin();
     return;
   }
@@ -252,7 +542,12 @@ function render() {
     main.innerHTML = currentAccountId ? renderAccountDetail(currentAccountId) : renderAccountsList();
   }
   else if (currentPage === 'transfers') main.innerHTML = renderTransfers();
+  else if (currentPage === 'zelle') main.innerHTML = renderZelle();
+  else if (currentPage === 'bills') main.innerHTML = renderBills();
+  else if (currentPage === 'deposit') main.innerHTML = renderDeposit();
   else if (currentPage === 'cards') main.innerHTML = renderCards();
+  else if (currentPage === 'settings') main.innerHTML = renderSettings();
+  else main.innerHTML = renderDashboard();
 }
 
 /* ---------------- Dashboard ---------------- */
@@ -267,11 +562,20 @@ function renderDashboard() {
       <div style="display:flex; align-items:center; gap:14px;">
         ${avatarHTML(cust, 50)}
         <div>
-          <h1>Good to see you, ${cust.name.split(' ')[0]}</h1>
+          <h1>Good to see you, ${esc(cust.name.split(' ')[0])}</h1>
           <div class="sub">Total balance across all accounts: ${fmt(totalBal)}</div>
         </div>
       </div>
-      <a class="btn btn-brass" href="#/app/transfers">Make a transfer</a>
+      <a class="btn btn-brass hide-m" href="#/app/transfers">Make a transfer</a>
+    </div>
+
+    <div class="quick-actions">
+      <a class="card qa" href="#/app/transfers"><span class="qa-ic">⇄</span>Transfer</a>
+      <a class="card qa" href="#/app/zelle"><span class="qa-ic">Z</span>Zelle®</a>
+      <a class="card qa" href="#/app/bills"><span class="qa-ic">▤</span>Pay bills</a>
+      <a class="card qa" href="#/app/deposit"><span class="qa-ic">⬒</span>Deposit check</a>
+      <a class="card qa" href="#/app/cards"><span class="qa-ic">▭</span>Cards</a>
+      <a class="card qa" href="#/app/settings"><span class="qa-ic">⚙</span>Settings</a>
     </div>
 
     <div class="acct-grid">
@@ -287,16 +591,16 @@ function renderDashboard() {
     <div class="card card-pad">
       <div class="section-title">Recent activity</div>
       <div class="table-scroll">
-        <table class="tx">
+        <table class="tx stack">
           <thead><tr><th>Date</th><th>Description</th><th>Account</th><th>Category</th><th style="text-align:right;">Amount</th></tr></thead>
           <tbody>
             ${allTx.map(t => `
               <tr>
-                <td>${fmtDate(t.date)}</td>
-                <td>${t.desc}</td>
-                <td>${t.acct}</td>
-                <td><span class="tx-cat">${t.cat}</span></td>
-                <td style="text-align:right;" class="amt ${t.amount<0?'neg':'pos'}">${fmt(t.amount)}</td>
+                <td class="c-date">${fmtDate(t.date)}</td>
+                <td class="c-desc">${esc(t.desc)}<div class="m-meta">${fmtDate(t.date)} · ${esc(t.acct)} · ${esc(t.cat)}</div></td>
+                <td class="c-acct">${esc(t.acct)}</td>
+                <td class="c-cat"><span class="tx-cat">${esc(t.cat)}</span></td>
+                <td style="text-align:right;" class="c-amt amt ${t.amount<0?'neg':'pos'}">${fmt(t.amount)}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -346,15 +650,15 @@ function renderAccountDetail(id) {
     <div class="card card-pad">
       <div class="section-title">Transaction history</div>
       <div class="table-scroll">
-        <table class="tx">
+        <table class="tx stack">
           <thead><tr><th>Date</th><th>Description</th><th>Category</th><th style="text-align:right;">Amount</th></tr></thead>
           <tbody>
             ${tx.map(t => `
               <tr>
-                <td>${fmtDate(t.date)}</td>
-                <td>${t.desc}</td>
-                <td><span class="tx-cat">${t.cat}</span></td>
-                <td style="text-align:right;" class="amt ${t.amount<0?'neg':'pos'}">${fmt(t.amount)}</td>
+                <td class="c-date">${fmtDate(t.date)}</td>
+                <td class="c-desc">${esc(t.desc)}<div class="m-meta">${fmtDate(t.date)} · ${esc(t.cat)}</div></td>
+                <td class="c-cat"><span class="tx-cat">${esc(t.cat)}</span></td>
+                <td style="text-align:right;" class="c-amt amt ${t.amount<0?'neg':'pos'}">${fmt(t.amount)}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -364,51 +668,175 @@ function renderAccountDetail(id) {
   `;
 }
 
+/* ---------------- Transfer code (required for every money movement) ----------------
+   Any action that sends money out opens this prompt first. The code is the
+   one the bank's admin set for the customer in the admin area.
+------------------------------------------------------------------------------------ */
+let pendingCodeAction = null;
+
+function requireCode(summary, onSuccess) {
+  const cust = getCurrentCustomer();
+  pendingCodeAction = onSuccess;
+  document.getElementById('code-modal-summary').textContent = summary;
+  document.getElementById('code-modal-input').value = '';
+  const err = document.getElementById('code-modal-error');
+  if (!cust.transferCode) {
+    err.textContent = 'No transfer code has been set on your account yet. Please contact the bank.';
+    err.classList.remove('hide');
+    document.getElementById('code-modal-confirm').disabled = true;
+  } else {
+    err.classList.add('hide');
+    document.getElementById('code-modal-confirm').disabled = false;
+  }
+  document.getElementById('code-modal').classList.remove('hide');
+  setTimeout(() => document.getElementById('code-modal-input').focus(), 50);
+}
+
+function closeCodeModal() {
+  pendingCodeAction = null;
+  document.getElementById('code-modal').classList.add('hide');
+}
+
+function confirmCodeModal(e) {
+  e.preventDefault();
+  const cust = getCurrentCustomer();
+  const entered = document.getElementById('code-modal-input').value.trim();
+  const err = document.getElementById('code-modal-error');
+  if (!cust.transferCode || entered !== String(cust.transferCode)) {
+    err.textContent = 'Incorrect transfer code. The transfer was not sent.';
+    err.classList.remove('hide');
+    document.getElementById('code-modal-input').value = '';
+    return;
+  }
+  const action = pendingCodeAction;
+  closeCodeModal();
+  if (action) action();
+}
+
+/* ---------------- Shared helpers for sending money ---------------- */
+function showErr(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.classList.remove('hide');
+}
+function hideErr(id) { document.getElementById(id).classList.add('hide'); }
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+
+function acctOptions(cust) {
+  return cust.accounts.map(a => `<option value="${a.id}">${esc(a.type)} (${a.number}) — ${fmt(a.balance)}</option>`).join('');
+}
+
+/* Takes money out of an account, with an optional separate fee line. */
+function debitAccount(from, amt, desc, cat, fee, feeDesc) {
+  const date = todayStr();
+  from.balance = +(from.balance - amt - (fee || 0)).toFixed(2);
+  from.transactions.unshift({ id: newTxId(), date, desc, cat, amount: -amt });
+  if (fee) from.transactions.unshift({ id: newTxId(), date, desc: feeDesc || 'Fee', cat: 'Fee', amount: -fee });
+}
+
+function recentByCat(cust, cats, n) {
+  return cust.accounts.flatMap(a => a.transactions.filter(t => cats.includes(t.cat)).map(t => ({ ...t, acct: a.type })))
+    .sort((a, b) => b.date.localeCompare(a.date)).slice(0, n || 5);
+}
+
+function recentList(items, emptyText) {
+  return items.length ? `
+    <table class="tx stack"><tbody>
+      ${items.map(t => `
+        <tr><td class="c-date">${fmtDate(t.date)}</td>
+        <td class="c-desc">${esc(t.desc)}<br><span style="color:var(--text-soft); font-size:0.78rem;">${esc(t.acct)}</span><div class="m-meta">${fmtDate(t.date)}</div></td>
+        <td style="text-align:right;" class="c-amt amt ${t.amount < 0 ? 'neg' : 'pos'}">${fmt(t.amount)}</td></tr>
+      `).join('')}
+    </tbody></table>` : `<div class="empty-state">${emptyText}</div>`;
+}
+
+function successNote(msg) {
+  return `<div class="confirm-note" style="margin-bottom:18px;">${msg}</div>`;
+}
+let flashMessage = '';
+function flash(msg) { flashMessage = msg; render(); flashMessage = ''; }
+function takeFlash() { return flashMessage ? successNote(flashMessage) : ''; }
+
 /* ---------------- Transfers ---------------- */
+let transferTab = 'own';
+function setTransferTab(tab) { transferTab = tab; render(); }
+
+const TRANSFER_TABS = [
+  ['own', 'Between my accounts'],
+  ['domestic', 'Domestic (US bank)'],
+  ['international', 'International']
+];
+
 function renderTransfers() {
   const cust = getCurrentCustomer();
-  const opts = cust.accounts.map(a => `<option value="${a.id}">${a.type} (${a.number}) — ${fmt(a.balance)}</option>`).join('');
-  const recentTransfers = cust.accounts.flatMap(a => a.transactions.filter(t => t.cat === 'Transfer').map(t => ({...t, acct: a.type})))
-    .sort((a,b) => b.date.localeCompare(a.date)).slice(0,5);
+  const opts = acctOptions(cust);
+  const tabs = TRANSFER_TABS.map(([k, label]) =>
+    `<button type="button" class="tab-btn ${transferTab === k ? 'active' : ''}" onclick="setTransferTab('${k}')">${label}</button>`).join('');
+
+  let panel = '';
+  let recent = [];
+  if (transferTab === 'own') {
+    recent = recentByCat(cust, ['Transfer']);
+    panel = `
+      <div class="section-title">Move money between your accounts</div>
+      <form onsubmit="submitTransfer(event)">
+        <div class="field"><label for="tf-from">From</label><select id="tf-from">${opts}</select></div>
+        <div class="field"><label for="tf-to">To</label><select id="tf-to">${opts}</select></div>
+        <div class="field"><label for="tf-amt">Amount</label>
+          <div class="amount-input"><span>$</span><input id="tf-amt" type="number" min="0.01" step="0.01" placeholder="0.00" required></div></div>
+        <div class="field"><label for="tf-memo">Memo (optional)</label><input id="tf-memo" type="text" placeholder="e.g. Rent, savings goal"></div>
+        <div id="tf-error" class="hide err"></div>
+        <button type="submit" class="btn btn-primary btn-block">Continue</button>
+      </form>`;
+  } else if (transferTab === 'domestic') {
+    recent = recentByCat(cust, ['Domestic']);
+    panel = `
+      <div class="section-title">Send to a US bank account</div>
+      <form onsubmit="submitDomesticTransfer(event)">
+        <div class="field"><label for="dm-from">From</label><select id="dm-from">${opts}</select></div>
+        <div class="field"><label for="dm-name">Recipient name</label><input id="dm-name" type="text" required></div>
+        <div class="field"><label for="dm-bank">Recipient bank</label><input id="dm-bank" type="text" placeholder="e.g. First National Bank" required></div>
+        <div class="field"><label for="dm-routing">Routing number (9 digits)</label><input id="dm-routing" type="text" inputmode="numeric" maxlength="9" required></div>
+        <div class="field"><label for="dm-acct">Account number</label><input id="dm-acct" type="text" inputmode="numeric" required></div>
+        <div class="field"><label for="dm-type">Account type</label><select id="dm-type"><option>Checking</option><option>Savings</option></select></div>
+        <div class="field"><label for="dm-speed">Speed</label>
+          <select id="dm-speed"><option value="ach">Standard ACH — 1–3 business days (free)</option><option value="wire">Domestic wire — same day ($25 fee)</option></select></div>
+        <div class="field"><label for="dm-amt">Amount</label>
+          <div class="amount-input"><span>$</span><input id="dm-amt" type="number" min="0.01" step="0.01" placeholder="0.00" required></div></div>
+        <div class="field"><label for="dm-memo">Memo (optional)</label><input id="dm-memo" type="text"></div>
+        <div id="dm-error" class="hide err"></div>
+        <button type="submit" class="btn btn-primary btn-block">Continue</button>
+      </form>`;
+  } else {
+    recent = recentByCat(cust, ['International']);
+    panel = `
+      <div class="section-title">International wire</div>
+      <form onsubmit="submitInternationalTransfer(event)">
+        <div class="field"><label for="intl-from">From</label><select id="intl-from">${opts}</select></div>
+        <div class="field"><label for="intl-name">Recipient name</label><input id="intl-name" type="text" required></div>
+        <div class="field"><label for="intl-country">Recipient country</label><input id="intl-country" type="text" placeholder="e.g. Germany" required></div>
+        <div class="field"><label for="intl-iban">IBAN / account number</label><input id="intl-iban" type="text" required></div>
+        <div class="field"><label for="intl-swift">SWIFT / BIC code</label><input id="intl-swift" type="text" required></div>
+        <div class="field"><label for="intl-amt">Amount</label>
+          <div class="amount-input"><span>$</span><input id="intl-amt" type="number" min="0.01" step="0.01" placeholder="0.00" required></div></div>
+        <div class="field"><label for="intl-purpose">Purpose (optional)</label><input id="intl-purpose" type="text" placeholder="e.g. Family support"></div>
+        <p style="font-size:0.8rem; color:var(--text-soft); margin:-4px 0 14px;">A flat $${WIRE_FEE} wire fee applies.</p>
+        <div id="intl-error" class="hide err"></div>
+        <button type="submit" class="btn btn-primary btn-block">Continue</button>
+      </form>`;
+  }
 
   return `
-    <div class="page-head"><div><h1>Transfers</h1><div class="sub">Move money between your own Waypoint accounts, instantly.</div></div></div>
+    <div class="page-head"><div><h1>Transfers</h1><div class="sub">Move money between your accounts, to another US bank, or abroad. A transfer code is needed to send.</div></div></div>
     <div class="transfer-layout">
       <div class="card card-pad transfer-form">
-        <div class="section-title">New transfer</div>
-        <form onsubmit="submitTransfer(event)">
-          <div class="field">
-            <label for="tf-from">From</label>
-            <select id="tf-from">${opts}</select>
-          </div>
-          <div class="field">
-            <label for="tf-to">To</label>
-            <select id="tf-to">${opts}</select>
-          </div>
-          <div class="field">
-            <label for="tf-amt">Amount</label>
-            <div class="amount-input"><span>$</span><input id="tf-amt" type="number" min="0.01" step="0.01" placeholder="0.00" required></div>
-          </div>
-          <div class="field">
-            <label for="tf-memo">Memo (optional)</label>
-            <input id="tf-memo" type="text" placeholder="e.g. Rent, savings goal">
-          </div>
-          <div id="tf-error" class="hide" style="color:var(--rust); font-size:0.85rem; margin-bottom:14px;"></div>
-          <button type="submit" class="btn btn-primary btn-block">Transfer funds</button>
-        </form>
+        <div class="tabs">${tabs}</div>
+        ${takeFlash()}
+        ${panel}
       </div>
       <div class="card card-pad">
-        <div class="section-title">Recent transfers</div>
-        ${recentTransfers.length ? `
-          <table class="tx">
-            <tbody>
-              ${recentTransfers.map(t => `
-                <tr><td>${fmtDate(t.date)}</td><td>${t.desc}<br><span style="color:var(--text-soft); font-size:0.78rem;">${t.acct}</span></td>
-                <td style="text-align:right;" class="amt ${t.amount<0?'neg':'pos'}">${fmt(t.amount)}</td></tr>
-              `).join('')}
-            </tbody>
-          </table>
-        ` : `<div class="empty-state">No transfers yet.</div>`}
+        <div class="section-title">Recent ${transferTab === 'own' ? 'transfers' : transferTab === 'domestic' ? 'domestic transfers' : 'wires'}</div>
+        ${recentList(recent, 'Nothing here yet.')}
       </div>
     </div>
   `;
@@ -420,21 +848,289 @@ function submitTransfer(e) {
   const toId = document.getElementById('tf-to').value;
   const amt = parseFloat(document.getElementById('tf-amt').value);
   const memo = document.getElementById('tf-memo').value.trim();
-  const errEl = document.getElementById('tf-error');
-  errEl.classList.add('hide');
+  hideErr('tf-error');
 
-  if (fromId === toId) { errEl.textContent = 'Choose two different accounts.'; errEl.classList.remove('hide'); return; }
-  if (!amt || amt <= 0) { errEl.textContent = 'Enter an amount greater than $0.'; errEl.classList.remove('hide'); return; }
+  if (fromId === toId) return showErr('tf-error', 'Choose two different accounts.');
+  if (!amt || amt <= 0) return showErr('tf-error', 'Enter an amount greater than $0.');
   const from = getAccount(fromId), to = getAccount(toId);
-  if (amt > from.balance) { errEl.textContent = `Insufficient funds in ${from.type}.`; errEl.classList.remove('hide'); return; }
+  if (amt > from.balance) return showErr('tf-error', `Insufficient funds in ${from.type}.`);
 
-  const today = new Date().toISOString().slice(0,10);
-  from.balance = +(from.balance - amt).toFixed(2);
+  requireCode(`Move ${fmt(amt)} from ${from.type} to ${to.type}.`, () => {
+    const date = todayStr();
+    from.balance = +(from.balance - amt).toFixed(2);
+    to.balance = +(to.balance + amt).toFixed(2);
+    from.transactions.unshift({ id: newTxId(), date, desc: memo ? `Transfer to ${to.type} — ${memo}` : `Transfer to ${to.type}`, cat: 'Transfer', amount: -amt });
+    to.transactions.unshift({ id: newTxId(), date, desc: memo ? `Transfer from ${from.type} — ${memo}` : `Transfer from ${from.type}`, cat: 'Transfer', amount: amt });
+    saveState();
+    flash(`Done — ${fmt(amt)} moved to ${to.type}.`);
+  });
+}
+
+const DOMESTIC_WIRE_FEE = 25;
+
+function submitDomesticTransfer(e) {
+  e.preventDefault();
+  const from = getAccount(document.getElementById('dm-from').value);
+  const name = document.getElementById('dm-name').value.trim();
+  const bank = document.getElementById('dm-bank').value.trim();
+  const routing = document.getElementById('dm-routing').value.trim();
+  const acctNo = document.getElementById('dm-acct').value.trim();
+  const speed = document.getElementById('dm-speed').value;
+  const memo = document.getElementById('dm-memo').value.trim();
+  const amt = parseFloat(document.getElementById('dm-amt').value);
+  hideErr('dm-error');
+
+  if (!/^\d{9}$/.test(routing)) return showErr('dm-error', 'Routing numbers are exactly 9 digits.');
+  if (!/^\d{4,17}$/.test(acctNo)) return showErr('dm-error', 'Enter a valid account number (4–17 digits).');
+  if (!amt || amt <= 0) return showErr('dm-error', 'Enter an amount greater than $0.');
+  const fee = speed === 'wire' ? DOMESTIC_WIRE_FEE : 0;
+  if (amt + fee > from.balance) return showErr('dm-error', `Insufficient funds — this comes to ${fmt(amt + fee)} including fees.`);
+
+  requireCode(`Send ${fmt(amt)} to ${name} at ${bank} (account ending ${acctNo.slice(-4)})${fee ? ` plus a ${fmt(fee)} wire fee` : ''}.`, () => {
+    const label = speed === 'wire' ? 'Domestic wire' : 'ACH transfer';
+    debitAccount(from, amt, `${label} to ${name} (${bank} ••••${acctNo.slice(-4)})${memo ? ' — ' + memo : ''}`, 'Domestic', fee, 'Domestic wire fee');
+    saveState();
+    flash(`${label} of ${fmt(amt)} to ${esc(name)} has been submitted.`);
+  });
+}
+
+const WIRE_FEE = 15;
+
+function submitInternationalTransfer(e) {
+  e.preventDefault();
+  const from = getAccount(document.getElementById('intl-from').value);
+  const name = document.getElementById('intl-name').value.trim();
+  const country = document.getElementById('intl-country').value.trim();
+  const amt = parseFloat(document.getElementById('intl-amt').value);
+  const purpose = document.getElementById('intl-purpose').value.trim();
+  hideErr('intl-error');
+
+  if (!amt || amt <= 0) return showErr('intl-error', 'Enter an amount greater than $0.');
+  const total = +(amt + WIRE_FEE).toFixed(2);
+  if (total > from.balance) return showErr('intl-error', `Insufficient funds — this wire plus the $${WIRE_FEE} fee comes to ${fmt(total)}.`);
+
+  requireCode(`Wire ${fmt(amt)} to ${name} in ${country}, plus a ${fmt(WIRE_FEE)} fee.`, () => {
+    debitAccount(from, amt, `Wire to ${name} (${country})${purpose ? ' — ' + purpose : ''}`, 'International', WIRE_FEE, 'International wire fee');
+    saveState();
+    flash(`Wire of ${fmt(amt)} to ${esc(name)} has been submitted.`);
+  });
+}
+
+/* ---------------- Zelle ---------------- */
+const ZELLE_LIMIT = 2500;
+
+function renderZelle() {
+  const cust = getCurrentCustomer();
+  const recent = recentByCat(cust, ['Zelle'], 6);
+  return `
+    <div class="page-head"><div><h1>Zelle®</h1><div class="sub">Send money to friends and family using their email or U.S. mobile number.</div></div></div>
+    <div class="transfer-layout">
+      <div class="card card-pad transfer-form">
+        ${takeFlash()}
+        <div class="section-title">Send money</div>
+        <form onsubmit="submitZelle(event)">
+          <div class="field"><label for="zl-from">From</label><select id="zl-from">${acctOptions(cust)}</select></div>
+          <div class="field"><label for="zl-to">Recipient email or mobile number</label><input id="zl-to" type="text" placeholder="name@email.com or (555) 123-4567" required></div>
+          <div class="field"><label for="zl-name">Recipient name (optional)</label><input id="zl-name" type="text"></div>
+          <div class="field"><label for="zl-amt">Amount</label>
+            <div class="amount-input"><span>$</span><input id="zl-amt" type="number" min="0.01" step="0.01" placeholder="0.00" required></div></div>
+          <div class="field"><label for="zl-memo">Message (optional)</label><input id="zl-memo" type="text" placeholder="e.g. Dinner"></div>
+          <p style="font-size:0.8rem; color:var(--text-soft); margin:-4px 0 14px;">Limit ${fmt(ZELLE_LIMIT)} per transaction. Only send to people you know and trust.</p>
+          <div id="zl-error" class="hide err"></div>
+          <button type="submit" class="btn btn-primary btn-block">Continue</button>
+        </form>
+      </div>
+      <div class="card card-pad">
+        <div class="section-title">Recent Zelle activity</div>
+        ${recentList(recent, 'No Zelle payments yet.')}
+      </div>
+    </div>
+  `;
+}
+
+function submitZelle(e) {
+  e.preventDefault();
+  const from = getAccount(document.getElementById('zl-from').value);
+  const to = document.getElementById('zl-to').value.trim();
+  const name = document.getElementById('zl-name').value.trim();
+  const memo = document.getElementById('zl-memo').value.trim();
+  const amt = parseFloat(document.getElementById('zl-amt').value);
+  hideErr('zl-error');
+
+  const isEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to);
+  const isPhone = to.replace(/\D/g, '').length >= 10;
+  if (!isEmail && !isPhone) return showErr('zl-error', 'Enter a valid email address or a 10-digit mobile number.');
+  if (!amt || amt <= 0) return showErr('zl-error', 'Enter an amount greater than $0.');
+  if (amt > ZELLE_LIMIT) return showErr('zl-error', `Zelle payments are limited to ${fmt(ZELLE_LIMIT)} per transaction.`);
+  if (amt > from.balance) return showErr('zl-error', `Insufficient funds in ${from.type}.`);
+
+  const who = name || to;
+  requireCode(`Send ${fmt(amt)} with Zelle® to ${who}.`, () => {
+    debitAccount(from, amt, `Zelle to ${who}${memo ? ' — ' + memo : ''}`, 'Zelle');
+    saveState();
+    flash(`${fmt(amt)} sent to ${esc(who)} with Zelle®.`);
+  });
+}
+
+/* ---------------- Bill pay ---------------- */
+const BILLERS = ['Northline Electric', 'Harborline Water & Sewer', 'Metro Fiber Internet', 'Cascade Mobile', 'Evergreen Insurance', 'City Property Tax', 'Other biller'];
+
+function renderBills() {
+  const cust = getCurrentCustomer();
+  const recent = recentByCat(cust, ['Bills'], 6);
+  return `
+    <div class="page-head"><div><h1>Pay bills</h1><div class="sub">Pay utilities, insurance, and other bills from your account.</div></div></div>
+    <div class="transfer-layout">
+      <div class="card card-pad transfer-form">
+        ${takeFlash()}
+        <div class="section-title">New payment</div>
+        <form onsubmit="submitBill(event)">
+          <div class="field"><label for="bp-from">Pay from</label><select id="bp-from">${acctOptions(cust)}</select></div>
+          <div class="field"><label for="bp-payee">Biller</label><select id="bp-payee">${BILLERS.map(b => `<option>${b}</option>`).join('')}</select></div>
+          <div class="field"><label for="bp-ref">Account / reference number</label><input id="bp-ref" type="text" required></div>
+          <div class="field"><label for="bp-amt">Amount</label>
+            <div class="amount-input"><span>$</span><input id="bp-amt" type="number" min="0.01" step="0.01" placeholder="0.00" required></div></div>
+          <div id="bp-error" class="hide err"></div>
+          <button type="submit" class="btn btn-primary btn-block">Continue</button>
+        </form>
+      </div>
+      <div class="card card-pad">
+        <div class="section-title">Recent bill payments</div>
+        ${recentList(recent, 'No bill payments yet.')}
+      </div>
+    </div>
+  `;
+}
+
+function submitBill(e) {
+  e.preventDefault();
+  const from = getAccount(document.getElementById('bp-from').value);
+  const payee = document.getElementById('bp-payee').value;
+  const ref = document.getElementById('bp-ref').value.trim();
+  const amt = parseFloat(document.getElementById('bp-amt').value);
+  hideErr('bp-error');
+  if (!amt || amt <= 0) return showErr('bp-error', 'Enter an amount greater than $0.');
+  if (amt > from.balance) return showErr('bp-error', `Insufficient funds in ${from.type}.`);
+
+  requireCode(`Pay ${fmt(amt)} to ${payee}.`, () => {
+    debitAccount(from, amt, `Bill payment — ${payee} (${ref})`, 'Bills');
+    saveState();
+    flash(`${fmt(amt)} paid to ${esc(payee)}.`);
+  });
+}
+
+/* ---------------- Mobile check deposit ---------------- */
+function renderDeposit() {
+  const cust = getCurrentCustomer();
+  const recent = recentByCat(cust, ['Deposit'], 6);
+  return `
+    <div class="page-head"><div><h1>Deposit a check</h1><div class="sub">Snap the front and back of your check and deposit it to your account.</div></div></div>
+    <div class="transfer-layout">
+      <div class="card card-pad transfer-form">
+        ${takeFlash()}
+        <div class="section-title">Check deposit</div>
+        <form onsubmit="submitDeposit(event)">
+          <div class="field"><label for="dp-to">Deposit to</label><select id="dp-to">${acctOptions(cust)}</select></div>
+          <div class="field"><label for="dp-amt">Check amount</label>
+            <div class="amount-input"><span>$</span><input id="dp-amt" type="number" min="0.01" step="0.01" placeholder="0.00" required></div></div>
+          <div class="field"><label for="dp-front">Front of check</label><input id="dp-front" type="file" accept="image/*" capture="environment" required></div>
+          <div class="field"><label for="dp-back">Back of check (endorsed)</label><input id="dp-back" type="file" accept="image/*" capture="environment" required></div>
+          <p style="font-size:0.8rem; color:var(--text-soft); margin:-4px 0 14px;">Write "For mobile deposit only at Waypoint" and sign the back. Keep the check for 14 days.</p>
+          <div id="dp-error" class="hide err"></div>
+          <button type="submit" class="btn btn-primary btn-block">Deposit check</button>
+        </form>
+      </div>
+      <div class="card card-pad">
+        <div class="section-title">Recent deposits</div>
+        ${recentList(recent, 'No check deposits yet.')}
+      </div>
+    </div>
+  `;
+}
+
+function submitDeposit(e) {
+  e.preventDefault();
+  const to = getAccount(document.getElementById('dp-to').value);
+  const amt = parseFloat(document.getElementById('dp-amt').value);
+  hideErr('dp-error');
+  if (!amt || amt <= 0) return showErr('dp-error', 'Enter an amount greater than $0.');
   to.balance = +(to.balance + amt).toFixed(2);
-  from.transactions.unshift({ date: today, desc: memo ? `Transfer to ${to.type} — ${memo}` : `Transfer to ${to.type}`, cat: 'Transfer', amount: -amt });
-  to.transactions.unshift({ date: today, desc: memo ? `Transfer from ${from.type} — ${memo}` : `Transfer from ${from.type}`, cat: 'Transfer', amount: amt });
+  to.transactions.unshift({ id: newTxId(), date: todayStr(), desc: 'Mobile check deposit', cat: 'Deposit', amount: amt });
   saveState();
-  render();
+  flash(`${fmt(amt)} deposited to ${esc(to.type)}.`);
+}
+
+/* ---------------- Settings (profile & security) ---------------- */
+function renderSettings() {
+  const cust = getCurrentCustomer();
+  const row = (label, value) => `<div class="info-row"><span>${label}</span><b>${value ? esc(value) : '—'}</b></div>`;
+  const since = cust.memberSince ? new Date(cust.memberSince + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '';
+  const dob = cust.dob ? new Date(cust.dob + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '';
+  return `
+    <div class="page-head"><div><h1>Settings</h1><div class="sub">Your personal information and security.</div></div></div>
+    <div class="transfer-layout">
+      <div>
+        <div class="card card-pad" style="margin-bottom:22px;">
+          <div style="display:flex; align-items:center; gap:16px; margin-bottom:18px;">
+            ${avatarHTML(cust, 72)}
+            <div><div style="font-family:'Fraunces',serif; font-size:1.3rem;">${esc(cust.name)}</div><div style="color:var(--text-soft); font-size:0.88rem;">@${esc(cust.username)}</div></div>
+          </div>
+          <div class="section-title">Personal information</div>
+          <div class="info-grid">
+            ${row('Full name', cust.name)}
+            ${row('Email', cust.email)}
+            ${row('Phone', cust.phone)}
+            ${row('Date of birth', dob)}
+            ${row('Home address', cust.address)}
+            ${row('Customer since', since)}
+          </div>
+          <p style="font-size:0.8rem; color:var(--text-soft); margin:14px 0 0;">To update your name, address, or other details, please contact the bank.</p>
+        </div>
+        <div class="card card-pad">
+          <div class="section-title">Your accounts</div>
+          <div class="info-grid">
+            ${cust.accounts.map(a => row(a.type, a.number)).join('')}
+            ${cust.cards.map(c => row(c.label, '•••• ' + c.number)).join('')}
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card card-pad" style="margin-bottom:22px;">
+          <div class="section-title">Security</div>
+          <div class="info-grid">
+            ${row('Access / transfer code', cust.transferCode ? 'Set by the bank (••••••)' : 'Not set — contact the bank')}
+          </div>
+          <p style="font-size:0.8rem; color:var(--text-soft); margin:12px 0 0;">You enter this code after logging in and before sending any money. Only the bank can change it. Never share it.</p>
+        </div>
+        <div class="card card-pad">
+          <div class="section-title">Change password</div>
+          ${takeFlash()}
+          <form onsubmit="submitChangePassword(event)">
+            <div class="field"><label for="pw-cur">Current password</label><input id="pw-cur" type="password" required autocomplete="off"></div>
+            <div class="field"><label for="pw-new">New password</label><input id="pw-new" type="password" minlength="6" required autocomplete="off"></div>
+            <div class="field"><label for="pw-new2">Confirm new password</label><input id="pw-new2" type="password" minlength="6" required autocomplete="off"></div>
+            <div id="pw-error" class="hide err"></div>
+            <button type="submit" class="btn btn-primary btn-block">Update password</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function submitChangePassword(e) {
+  e.preventDefault();
+  const cust = getCurrentCustomer();
+  const cur = document.getElementById('pw-cur').value;
+  const n1 = document.getElementById('pw-new').value;
+  const n2 = document.getElementById('pw-new2').value;
+  hideErr('pw-error');
+  if (cur !== cust.password) return showErr('pw-error', 'Your current password is incorrect.');
+  if (n1.length < 6) return showErr('pw-error', 'Use at least 6 characters.');
+  if (n1 !== n2) return showErr('pw-error', "The new passwords don't match.");
+  cust.password = n1;
+  saveState();
+  flash('Your password has been updated.');
 }
 
 /* ---------------- Cards ---------------- */
@@ -442,6 +1138,7 @@ function renderCards() {
   const cust = getCurrentCustomer();
   return `
     <div class="page-head"><div><h1>Cards</h1><div class="sub">Freeze a card instantly if it's ever lost or misplaced.</div></div></div>
+    ${cust.cards.length ? '' : '<div class="card card-pad empty-state">No cards on your account yet. Contact the bank to request one.</div>'}
     <div class="cards-grid">
       ${cust.cards.map(c => `
         <div>
@@ -529,25 +1226,34 @@ function refreshCaptcha() {
 
 function handleOpenAccount(e) {
   e.preventDefault();
-  const entered = document.getElementById('oa-captcha').value.trim().toUpperCase();
-  const errEl = document.getElementById('oa-captcha-error');
+  const captchaErrEl = document.getElementById('oa-captcha-error');
+  const unameErrEl = document.getElementById('oa-username-error');
+  unameErrEl.classList.add('hide');
 
+  const entered = document.getElementById('oa-captcha').value.trim().toUpperCase();
   if (entered !== captchaText) {
-    errEl.classList.remove('hide');
+    captchaErrEl.classList.remove('hide');
     refreshCaptcha();
     return;
   }
-  errEl.classList.add('hide');
+  captchaErrEl.classList.add('hide');
 
   const name = document.getElementById('oa-name').value.trim() || 'New Member';
   const email = document.getElementById('oa-email').value.trim();
   const username = document.getElementById('oa-username').value.trim();
+  const password = document.getElementById('oa-password').value;
 
-  const existing = state.customers.find(c => c.username.toLowerCase() === username.toLowerCase());
-  const customer = existing || createCustomer({ name, username, email, startingBalance: 0 });
-  state.currentCustomerId = customer.id;
+  if (state.customers.some(c => c.username.toLowerCase() === username.toLowerCase())) {
+    unameErrEl.classList.remove('hide');
+    refreshCaptcha();
+    return;
+  }
+
+  createCustomer({ name, username, email, password, startingBalance: 0, status: 'pending' });
   saveState();
-  location.hash = '#/app/dashboard';
+
+  document.getElementById('open-account-form').classList.add('hide');
+  document.getElementById('open-account-success').classList.remove('hide');
 }
 
 /* ---------------- Contact form ---------------- */
@@ -592,10 +1298,15 @@ function adminLogout() {
 
 let adminView = 'list';       // 'list' | 'add' | 'detail'
 let adminSelectedId = null;
+let adminEditing = false;
+let adminIssuing = false;
+let adminNotice = '';
 
-function adminGoList()  { adminView = 'list';  adminSelectedId = null; renderAdmin(); }
+function adminGoList()  { adminView = 'list';  adminSelectedId = null; adminEditing = false; adminIssuing = false; renderAdmin(); }
 function adminGoAdd()   { adminView = 'add';   renderAdmin(); }
-function adminGoDetail(id) { adminView = 'detail'; adminSelectedId = id; renderAdmin(); }
+function adminGoDetail(id, editing) { adminView = 'detail'; adminSelectedId = id; adminEditing = !!editing; adminIssuing = false; adminNotice = ''; renderAdmin(); }
+function adminStartEdit(id) { adminEditing = true; renderAdminDetail(id); }
+function adminCancelEdit(id) { adminEditing = false; renderAdminDetail(id); }
 
 function renderAdmin() {
   if (adminView === 'add') return renderAdminAdd();
@@ -616,16 +1327,20 @@ function renderAdminList() {
     </div>
     <div class="card">
       <div class="table-scroll">
-        <table class="tx">
-          <thead><tr><th></th><th>Name</th><th>Username</th><th>Email</th><th style="text-align:right;">Total balance</th></tr></thead>
+        <table class="tx stack admin-table">
+          <thead><tr><th></th><th>Name</th><th>Username</th><th>Email</th><th>Status</th><th style="text-align:right;">Total balance</th><th></th></tr></thead>
           <tbody>
             ${state.customers.map(c => `
               <tr style="cursor:pointer;" onclick="adminGoDetail('${c.id}')">
-                <td>${avatarHTML(c, 32)}</td>
-                <td style="font-weight:600;">${c.name}</td>
-                <td>@${c.username}</td>
-                <td>${c.email || '—'}</td>
-                <td style="text-align:right;">${fmt(c.accounts.reduce((s,a) => s + a.balance, 0))}</td>
+                <td class="a-avatar">${avatarHTML(c, 36)}</td>
+                <td class="a-name" style="font-weight:600;">${esc(c.name)}<div class="m-meta">@${esc(c.username)}${c.email ? ' · ' + esc(c.email) : ''}</div></td>
+                <td class="c-user">@${esc(c.username)}</td>
+                <td class="c-email">${esc(c.email) || '—'}</td>
+                <td class="a-status">${statusBadge(c)}</td>
+                <td class="a-total" style="text-align:right;">${fmt(c.accounts.reduce((s,a) => s + a.balance, 0))}</td>
+                <td class="a-act" style="text-align:right; white-space:nowrap;">
+                  <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); adminGoDetail('${c.id}', true)">Edit</button>
+                </td>
               </tr>
             `).join('')}
           </tbody>
@@ -644,10 +1359,16 @@ function renderAdminAdd() {
     <form class="card card-pad" style="max-width:480px;" onsubmit="handleAddCustomer(event)">
       <div class="field"><label for="admin-new-name">Full name</label><input id="admin-new-name" type="text" required></div>
       <div class="field"><label for="admin-new-username">Username (for their login)</label><input id="admin-new-username" type="text" required></div>
+      <div class="field"><label for="admin-new-password">Password (for their login)</label><input id="admin-new-password" type="text" required></div>
       <div class="field"><label for="admin-new-email">Email</label><input id="admin-new-email" type="email"></div>
+      <div class="field"><label for="admin-new-phone">Phone</label><input id="admin-new-phone" type="text"></div>
+      <div class="field"><label for="admin-new-dob">Date of birth</label><input id="admin-new-dob" type="date"></div>
+      <div class="field"><label for="admin-new-address">Home address</label><input id="admin-new-address" type="text"></div>
+      <div class="field"><label for="admin-new-code">Access / transfer code</label><input id="admin-new-code" type="text" inputmode="numeric" placeholder="e.g. 482915" required></div>
       <div class="field"><label for="admin-new-balance">Starting checking balance</label><div class="amount-input"><span>$</span><input id="admin-new-balance" type="number" step="0.01" value="0"></div></div>
       <div class="field"><label for="admin-new-photo">Photo</label><input id="admin-new-photo" type="file" accept="image/*"></div>
-      <p style="font-size:0.8rem; color:var(--text-soft); margin:-8px 0 16px;">This photo appears at the top of their account when they log in. Use a small image — it's stored in the browser.</p>
+      <p style="font-size:0.8rem; color:var(--text-soft); margin:-8px 0 16px;">This photo appears at the top of their account when they log in. Use a small image — it's stored in the browser. Customers you add here are approved automatically.</p>
+      <div id="admin-new-error" class="hide" style="color:var(--rust); font-size:0.85rem; margin-bottom:14px;">That username is already taken.</div>
       <div style="display:flex; gap:10px;">
         <button type="submit" class="btn btn-primary">Create customer</button>
         <button type="button" class="btn btn-ghost" onclick="adminGoList()">Cancel</button>
@@ -660,12 +1381,22 @@ function handleAddCustomer(e) {
   e.preventDefault();
   const name = document.getElementById('admin-new-name').value.trim();
   const username = document.getElementById('admin-new-username').value.trim();
+  const password = document.getElementById('admin-new-password').value;
   const email = document.getElementById('admin-new-email').value.trim();
+  const phone = document.getElementById('admin-new-phone').value.trim();
+  const dob = document.getElementById('admin-new-dob').value;
+  const address = document.getElementById('admin-new-address').value.trim();
+  const transferCode = document.getElementById('admin-new-code').value.trim();
   const startingBalance = parseFloat(document.getElementById('admin-new-balance').value) || 0;
   const file = document.getElementById('admin-new-photo').files[0];
 
+  if (state.customers.some(c => c.username.toLowerCase() === username.toLowerCase())) {
+    document.getElementById('admin-new-error').classList.remove('hide');
+    return;
+  }
+
   function finish(photo) {
-    createCustomer({ name, username, email, photo, startingBalance });
+    createCustomer({ name, username, email, password, photo, startingBalance, status: 'approved', phone, dob, address, transferCode });
     saveState();
     adminGoList();
   }
@@ -685,21 +1416,33 @@ function renderAdminDetail(id) {
   if (!el) return;
   if (!c) { adminGoList(); return; }
 
+  const pendingBanner = c.status === 'pending' ? `
+    <div class="card card-pad" style="margin-bottom:20px; border-left:3px solid var(--rust);">
+      <div class="section-title" style="color:var(--rust);">Pending approval</div>
+      <p style="color:var(--text-soft); margin:0 0 14px;">This application hasn't been approved yet — they can't log in until you do.</p>
+      <div style="display:flex; gap:10px;">
+        <button class="btn btn-primary btn-sm" onclick="adminApproveCustomer('${c.id}')">Approve</button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--rust); border-color:var(--rust);" onclick="adminRejectCustomer('${c.id}')">Reject &amp; delete</button>
+      </div>
+    </div>
+  ` : '';
+
   el.innerHTML = `
     <a href="#" onclick="adminGoList();return false;" style="font-size:0.85rem; color:var(--text-soft); text-decoration:none;">← All customers</a>
     <div class="page-head" style="margin-top:10px;">
       <div style="display:flex; align-items:center; gap:14px;">
         ${avatarHTML(c, 54)}
-        <div><h1>${c.name}</h1><div class="sub">@${c.username} · ${c.email || 'no email on file'}</div></div>
+        <div><h1>${esc(c.name)} ${c.status !== 'approved' ? statusBadge(c) : ''}</h1><div class="sub">@${esc(c.username)} · ${esc(c.email) || 'no email on file'}</div></div>
       </div>
-      <button class="btn btn-ghost btn-sm" style="color:var(--rust); border-color:var(--rust);" onclick="adminDeleteCustomer('${c.id}')">Delete customer</button>
+      <div style="display:flex; gap:10px;">
+        <button class="btn btn-ghost btn-sm" style="color:var(--rust); border-color:var(--rust);" onclick="adminDeleteCustomer('${c.id}')">Delete customer</button>
+      </div>
     </div>
 
-    <div class="card card-pad" style="margin-bottom:20px;">
-      <div class="section-title">Replace photo</div>
-      <input type="file" accept="image/*" onchange="handleReplacePhoto(event,'${c.id}')">
-      <p style="font-size:0.8rem; color:var(--text-soft); margin:8px 0 0;">Shown at the top of their account when they log in.</p>
-    </div>
+    ${pendingBanner}
+    ${adminStatusHTML(c)}
+
+    ${adminEditing ? adminEditFormHTML(c) : adminProfileHTML(c)}
 
     <div class="acct-grid">
       ${c.accounts.map(a => `
@@ -712,31 +1455,58 @@ function renderAdminDetail(id) {
     </div>
 
     <div class="card card-pad" style="margin-bottom:24px;">
-      <div class="section-title">Adjust a balance</div>
-      <form onsubmit="submitAdminAdjustment(event,'${c.id}')" style="display:grid; grid-template-columns:1.3fr 1fr 1.3fr auto; gap:12px; align-items:end;">
+      <div class="section-title">Add a transaction</div>
+      <form class="tx-add-form" onsubmit="submitAdminAddTransaction(event,'${c.id}')">
         <div class="field" style="margin:0;"><label>Account</label>
-          <select id="admin-adj-account">${c.accounts.map(a => `<option value="${a.id}">${a.type}</option>`).join('')}</select>
+          <select id="admin-tx-account">${c.accounts.map(a => `<option value="${a.id}">${a.type}</option>`).join('')}</select>
         </div>
-        <div class="field" style="margin:0;"><label>Amount</label>
-          <div class="amount-input"><span>$</span><input id="admin-adj-amount" type="number" step="0.01" required></div>
-        </div>
-        <div class="field" style="margin:0;"><label>Reason</label><input id="admin-adj-reason" type="text" placeholder="e.g. Fee reversal"></div>
-        <button type="submit" class="btn btn-brass">Apply</button>
+        <div class="field" style="margin:0;"><label>Date</label><input id="admin-tx-date" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+        <div class="field" style="margin:0;"><label>Description</label><input id="admin-tx-desc" type="text" placeholder="e.g. Fee reversal" required></div>
+        <div class="field" style="margin:0;"><label>Amount</label><div class="amount-input"><span>$</span><input id="admin-tx-amount" type="number" step="0.01" required></div></div>
+        <button type="submit" class="btn btn-brass">Add</button>
       </form>
-      <p style="font-size:0.8rem; color:var(--text-soft); margin-top:10px;">Use a negative amount to deduct funds.</p>
+      <p style="font-size:0.8rem; color:var(--text-soft); margin-top:10px;">Negative for a charge or withdrawal. Updates the account balance too.</p>
     </div>
+
+    ${c.accounts.map(a => `
+      <div class="card card-pad" style="margin-bottom:24px;">
+        <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>${a.type} — history</span>
+          <button class="btn btn-ghost btn-sm" onclick="adminGenerateActivity('${c.id}','${a.id}')">✨ Generate activity</button>
+        </div>
+        <div class="table-scroll">
+          <table class="tx stack">
+            <thead><tr><th>Date</th><th>Description</th><th>Category</th><th style="text-align:right;">Amount</th><th></th></tr></thead>
+            <tbody>
+              ${[...a.transactions].sort((x,y) => y.date.localeCompare(x.date)).map(t => `
+                <tr>
+                  <td class="c-date">${fmtDate(t.date)}</td>
+                  <td class="c-desc">${esc(t.desc)}<div class="m-meta">${fmtDate(t.date)} · ${esc(t.cat)}</div></td>
+                  <td class="c-cat"><span class="tx-cat">${esc(t.cat)}</span></td>
+                  <td style="text-align:right;" class="c-amt amt ${t.amount<0?'neg':'pos'}">${fmt(t.amount)}</td>
+                  <td class="c-act"><button class="btn btn-ghost btn-sm" style="padding:4px 10px; color:var(--rust); border-color:var(--rust);" onclick="adminDeleteTransaction('${c.id}','${a.id}','${t.id}')">Remove</button></td>
+                </tr>
+              `).join('') || `<tr><td colspan="5" class="c-act" style="text-align:center; color:var(--text-soft);">No transactions yet.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `).join('')}
 
     <div class="card card-pad">
       <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
         <span>Cards</span>
-        <button class="btn btn-ghost btn-sm" onclick="adminIssueCard('${c.id}')">+ Issue card</button>
+        <button class="btn ${adminIssuing ? 'btn-ghost' : 'btn-brass'} btn-sm" onclick="adminToggleIssue()">${adminIssuing ? 'Cancel' : '+ Issue card'}</button>
       </div>
+      ${adminIssuing ? adminIssueFormHTML(c) : ''}
+      ${c.cards.length ? '' : '<div class="empty-state" style="padding:26px 10px;">No cards issued yet.</div>'}
       <div class="cards-grid">
         ${c.cards.map(card => `
           <div>
             ${cardMarkup(card)}
             <div class="card-controls">
               <label class="toggle ${card.frozen ? 'on' : ''}" onclick="adminToggleFreeze('${c.id}','${card.id}')"><span class="sw"></span> ${card.frozen ? 'Frozen' : 'Freeze card'}</label>
+              <button class="btn btn-ghost btn-sm" style="color:var(--rust); border-color:var(--rust);" onclick="adminDeleteCard('${c.id}','${card.id}')">Delete card</button>
             </div>
           </div>
         `).join('')}
@@ -745,18 +1515,299 @@ function renderAdminDetail(id) {
   `;
 }
 
-function submitAdminAdjustment(e, custId) {
+function adminProfileHTML(c) {
+  const row = (label, value) => `<div class="info-row"><span>${label}</span><b>${value ? esc(value) : '—'}</b></div>`;
+  return `
+    <div class="card card-pad" style="margin-bottom:20px;">
+      <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>Customer details</span>
+        <button class="btn btn-brass btn-sm" onclick="adminStartEdit('${c.id}')">✎ Edit</button>
+      </div>
+      <div class="info-grid">
+        ${row('Full name', c.name)}
+        ${row('Username', c.username)}
+        ${row('Email', c.email)}
+        ${row('Phone', c.phone)}
+        ${row('Date of birth', c.dob)}
+        ${row('Home address', c.address)}
+        ${row('Access / transfer code', c.transferCode || 'NOT SET — customer cannot log in or send money')}
+        ${row('Customer since', c.memberSince ? new Date(c.memberSince + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '')}
+      </div>
+    </div>
+  `;
+}
+
+function adminEditFormHTML(c) {
+  return `
+    <div class="card card-pad" style="margin-bottom:20px; border-left:3px solid var(--brass);">
+      <div class="section-title">Editing customer</div>
+      <form onsubmit="submitEditCustomer(event,'${c.id}')">
+        <div class="form-cols">
+          <div class="field"><label>Full name</label><input id="admin-edit-name" type="text" value="${esc(c.name)}" required></div>
+          <div class="field"><label>Username</label><input id="admin-edit-username" type="text" value="${esc(c.username)}" required></div>
+          <div class="field"><label>Email</label><input id="admin-edit-email" type="email" value="${esc(c.email)}"></div>
+          <div class="field"><label>Phone</label><input id="admin-edit-phone" type="text" value="${esc(c.phone)}"></div>
+          <div class="field"><label>Date of birth</label><input id="admin-edit-dob" type="date" value="${esc(c.dob)}"></div>
+          <div class="field"><label>Home address</label><input id="admin-edit-address" type="text" value="${esc(c.address)}"></div>
+          <div class="field"><label>Customer since (join date)</label><input id="admin-edit-since" type="date" value="${esc(c.memberSince)}"></div>
+          <div class="field"><label>Access / transfer code</label><input id="admin-edit-code" type="text" inputmode="numeric" value="${esc(c.transferCode)}" placeholder="Required for login and every transfer"></div>
+          <div class="field"><label>Reset password (leave blank to keep current)</label><input id="admin-edit-password" type="text" placeholder="New password"></div>
+        </div>
+        <div class="field"><label>Photo</label><input id="admin-edit-photo" type="file" accept="image/*"></div>
+        <p style="font-size:0.8rem; color:var(--text-soft); margin:-8px 0 18px;">The photo is shown on the customer's code screen and dashboard. Leave empty to keep the current photo.</p>
+
+        <div class="section-title" style="margin-top:6px;">Account balances</div>
+        <div class="form-cols">
+          ${c.accounts.map((a, i) => `
+            <div class="field"><label>${esc(a.type)} ${esc(a.number)}</label>
+              <div class="amount-input"><span>$</span><input id="admin-edit-bal-${i}" type="number" step="0.01" value="${a.balance.toFixed(2)}"></div></div>
+          `).join('')}
+        </div>
+        <p style="font-size:0.8rem; color:var(--text-soft); margin:-4px 0 18px;">Changing a balance adds a "Balance adjustment" line to that account's history so the numbers still add up.</p>
+
+        <div id="admin-edit-error" class="hide" style="color:var(--rust); font-size:0.85rem; margin-bottom:14px;">That username is taken by someone else.</div>
+        <div style="display:flex; gap:10px;">
+          <button type="submit" class="btn btn-primary btn-sm">Save changes</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="adminCancelEdit('${c.id}')">Cancel</button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+/* Account status card: Active / Suspended / On hold, with the message the customer will see. */
+function adminStatusHTML(c) {
+  if (c.status === 'pending') return '';
+  const restricted = isRestricted(c);
+  const note = adminNotice ? `<div class="confirm-note" style="margin-bottom:14px;">${esc(adminNotice)}</div>` : '';
+  adminNotice = '';
+  return `
+    <div class="card card-pad" style="margin-bottom:20px; border-left:3px solid ${restricted ? 'var(--rust)' : 'var(--moss)'};">
+      <div class="section-title" style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+        <span>Account status</span>${statusBadge(c)}
+      </div>
+      ${note}
+      ${restricted ? `<p style="margin:0 0 14px; color:var(--text-soft); font-size:0.9rem;">This customer sees the suspension page when they log in, and on any click or transfer if they're already signed in.</p>` : ''}
+      <form onsubmit="adminApplyStatus(event,'${c.id}')">
+        <div class="form-cols">
+          <div class="field"><label for="admin-status">Status</label>
+            <select id="admin-status">
+              <option value="approved" ${c.status === 'approved' ? 'selected' : ''}>Active</option>
+              <option value="suspended" ${c.status === 'suspended' ? 'selected' : ''}>Suspended</option>
+              <option value="hold" ${c.status === 'hold' ? 'selected' : ''}>On hold</option>
+            </select></div>
+        </div>
+        <div class="field"><label for="admin-status-msg">Message shown to the customer (optional)</label>
+          <textarea id="admin-status-msg" class="textarea" rows="3" placeholder="Leave blank to use the standard message asking them to contact the bank.">${esc(c.suspendMessage)}</textarea></div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button type="submit" class="btn btn-primary btn-sm">Apply status</button>
+          ${restricted ? `<button type="button" class="btn btn-ghost btn-sm" onclick="adminLiftRestriction('${c.id}')">Lift suspension</button>` : ''}
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+function adminApplyStatus(e, id) {
+  e.preventDefault();
+  const c = state.customers.find(x => x.id === id);
+  const status = document.getElementById('admin-status').value;
+  c.status = status;
+  c.suspendMessage = document.getElementById('admin-status-msg').value.trim();
+  adminNotice = status === 'approved' ? 'Account is active.' : (status === 'hold' ? 'Account put on hold.' : 'Account suspended.');
+  saveState();
+  renderAdminDetail(id);
+}
+
+function adminLiftRestriction(id) {
+  const c = state.customers.find(x => x.id === id);
+  c.status = 'approved';
+  c.suspendMessage = '';
+  adminNotice = 'Restriction lifted — the customer can log in and transfer again.';
+  saveState();
+  renderAdminDetail(id);
+}
+
+/* Cards: issue (debit or credit) and delete */
+function adminToggleIssue() { adminIssuing = !adminIssuing; renderAdminDetail(adminSelectedId); }
+
+function defaultExpiry() {
+  const d = new Date();
+  return String(d.getMonth() + 1).padStart(2, '0') + '/' + String((d.getFullYear() + 5) % 100).padStart(2, '0');
+}
+
+function adminIssueFormHTML(c) {
+  return `
+    <form class="card-issue-form" onsubmit="adminSubmitIssueCard(event,'${c.id}')">
+      <div class="form-cols">
+        <div class="field"><label for="issue-kind">Card type</label>
+          <select id="issue-kind" onchange="document.getElementById('issue-limit-wrap').classList.toggle('hide', this.value !== 'Credit')">
+            <option value="Debit">Debit</option><option value="Credit">Credit</option>
+          </select></div>
+        <div class="field"><label for="issue-holder">Name on card</label><input id="issue-holder" type="text" value="${esc(c.name)}" required></div>
+        <div class="field"><label for="issue-expiry">Expiry (MM/YY)</label><input id="issue-expiry" type="text" value="${defaultExpiry()}" placeholder="MM/YY" pattern="(0[1-9]|1[0-2])/[0-9]{2}" maxlength="5" required></div>
+        <div class="field hide" id="issue-limit-wrap"><label for="issue-limit">Credit limit</label>
+          <div class="amount-input"><span>$</span><input id="issue-limit" type="number" min="0" step="100" value="5000"></div></div>
+      </div>
+      <div style="display:flex; gap:10px; margin-bottom:22px;">
+        <button type="submit" class="btn btn-primary btn-sm">Issue card</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="adminToggleIssue()">Cancel</button>
+      </div>
+    </form>
+  `;
+}
+
+function adminSubmitIssueCard(e, custId) {
   e.preventDefault();
   const c = state.customers.find(x => x.id === custId);
-  const accId = document.getElementById('admin-adj-account').value;
-  const amt = parseFloat(document.getElementById('admin-adj-amount').value);
-  const reason = document.getElementById('admin-adj-reason').value.trim() || 'Admin adjustment';
+  const kind = document.getElementById('issue-kind').value;
+  const holder = document.getElementById('issue-holder').value.trim() || c.name;
+  const expiry = document.getElementById('issue-expiry').value.trim() || defaultExpiry();
+  let number;
+  do { number = String(1000 + Math.floor(Math.random() * 9000)); } while (c.cards.some(k => k.number === number));
+  const card = {
+    id: custId + '_card' + Date.now(), kind,
+    label: kind === 'Credit' ? 'Waypoint Rewards Credit' : 'Everyday Checking Debit',
+    number, holder, expiry, frozen: false
+  };
+  if (kind === 'Credit') { card.balance = 0; card.limit = parseFloat(document.getElementById('issue-limit').value) || 5000; }
+  c.cards.push(card);
+  adminIssuing = false;
+  saveState();
+  renderAdminDetail(custId);
+}
+
+function adminDeleteCard(custId, cardId) {
+  const c = state.customers.find(x => x.id === custId);
+  const card = c.cards.find(k => k.id === cardId);
+  if (!card) return;
+  if (!confirm(`Delete the ${card.kind.toLowerCase()} card ending ${card.number}? The customer will no longer see it.`)) return;
+  c.cards = c.cards.filter(k => k.id !== cardId);
+  saveState();
+  renderAdminDetail(custId);
+}
+
+function adminApproveCustomer(id) {
+  const c = state.customers.find(x => x.id === id);
+  c.status = 'approved';
+  saveState();
+  renderAdminDetail(id);
+}
+
+function adminRejectCustomer(id) {
+  if (!confirm('Reject and delete this application? This cannot be undone.')) return;
+  state.customers = state.customers.filter(c => c.id !== id);
+  saveState();
+  adminGoList();
+}
+
+function submitEditCustomer(e, custId) {
+  e.preventDefault();
+  const c = state.customers.find(x => x.id === custId);
+  const val = id => document.getElementById(id).value;
+  const name = val('admin-edit-name').trim();
+  const username = val('admin-edit-username').trim();
+  const email = val('admin-edit-email').trim();
+  const phone = val('admin-edit-phone').trim();
+  const dob = val('admin-edit-dob');
+  const address = val('admin-edit-address').trim();
+  const code = val('admin-edit-code').trim();
+  const since = val('admin-edit-since');
+  const newPass = val('admin-edit-password');
+  const file = document.getElementById('admin-edit-photo').files[0];
+  const errEl = document.getElementById('admin-edit-error');
+
+  if (state.customers.some(x => x.id !== custId && x.username.toLowerCase() === username.toLowerCase())) {
+    errEl.classList.remove('hide');
+    return;
+  }
+  errEl.classList.add('hide');
+
+  function finish(photo) {
+    c.name = name; c.username = username; c.email = email;
+    c.phone = phone; c.dob = dob; c.address = address; c.transferCode = code;
+    if (since) c.memberSince = since;
+    if (newPass) c.password = newPass;
+    if (photo) c.photo = photo;
+    c.cards.forEach(card => { card.holder = name; }); // keep card names in sync
+
+    const today = todayStr();
+    c.accounts.forEach((a, i) => {
+      const input = document.getElementById('admin-edit-bal-' + i);
+      if (!input) return;
+      const nb = parseFloat(input.value);
+      if (isNaN(nb)) return;
+      const diff = +(nb - a.balance).toFixed(2);
+      if (diff !== 0) {
+        a.balance = +nb.toFixed(2);
+        a.transactions.unshift({ id: newTxId(), date: today, desc: 'Balance adjustment', cat: 'Admin', amount: diff });
+      }
+    });
+
+    adminEditing = false;
+    saveState();
+    renderAdminDetail(custId);
+  }
+
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = (ev) => finish(ev.target.result);
+    reader.readAsDataURL(file);
+  } else {
+    finish(null);
+  }
+}
+
+function submitAdminAddTransaction(e, custId) {
+  e.preventDefault();
+  const c = state.customers.find(x => x.id === custId);
+  const accId = document.getElementById('admin-tx-account').value;
+  const date = document.getElementById('admin-tx-date').value || new Date().toISOString().slice(0, 10);
+  const desc = document.getElementById('admin-tx-desc').value.trim() || 'Admin adjustment';
+  const amt = parseFloat(document.getElementById('admin-tx-amount').value);
   if (!amt) return;
 
   const acc = c.accounts.find(a => a.id === accId);
   acc.balance = +(acc.balance + amt).toFixed(2);
-  const today = new Date().toISOString().slice(0, 10);
-  acc.transactions.unshift({ date: today, desc: reason, cat: 'Admin', amount: amt });
+  acc.transactions.unshift({ id: newTxId(), date, desc, cat: 'Admin', amount: amt });
+  saveState();
+  renderAdminDetail(custId);
+}
+
+function adminDeleteTransaction(custId, acctId, txId) {
+  const c = state.customers.find(x => x.id === custId);
+  const acc = c.accounts.find(a => a.id === acctId);
+  const idx = acc.transactions.findIndex(t => t.id === txId);
+  if (idx === -1) return;
+  acc.balance = +(acc.balance - acc.transactions[idx].amount).toFixed(2);
+  acc.transactions.splice(idx, 1);
+  saveState();
+  renderAdminDetail(custId);
+}
+
+/* Auto-generated realistic activity, spread over the last 28 days. */
+const ACTIVITY_TEMPLATES = [
+  { desc: 'Harborline Grocery', cat: 'Groceries', range: [-95, -20] },
+  { desc: 'Riverside Coffee Co.', cat: 'Dining', range: [-8, -3] },
+  { desc: 'Northline Electric', cat: 'Utilities', range: [-110, -40] },
+  { desc: 'Waypoint ATM Withdrawal', cat: 'Cash', range: [-100, -20] },
+  { desc: 'Paycheck deposit', cat: 'Income', range: [1200, 2400] },
+  { desc: 'Streamline Subscriptions', cat: 'Subscriptions', range: [-20, -9] },
+  { desc: 'Corner Hardware', cat: 'Shopping', range: [-60, -15] },
+  { desc: 'Monthly interest', cat: 'Interest', range: [5, 25] },
+];
+
+function adminGenerateActivity(custId, acctId) {
+  const c = state.customers.find(x => x.id === custId);
+  const acc = c.accounts.find(a => a.id === acctId);
+  for (let i = 0; i < 6; i++) {
+    const t = ACTIVITY_TEMPLATES[Math.floor(Math.random() * ACTIVITY_TEMPLATES.length)];
+    const amount = +(t.range[0] + Math.random() * (t.range[1] - t.range[0])).toFixed(2);
+    const d = new Date();
+    d.setDate(d.getDate() - (Math.floor(Math.random() * 28) + 1));
+    acc.transactions.push({ id: newTxId(), date: d.toISOString().slice(0, 10), desc: t.desc, cat: t.cat, amount });
+    acc.balance = +(acc.balance + amount).toFixed(2);
+  }
   saveState();
   renderAdminDetail(custId);
 }
@@ -765,19 +1816,6 @@ function adminToggleFreeze(custId, cardId) {
   const c = state.customers.find(x => x.id === custId);
   const card = c.cards.find(k => k.id === cardId);
   card.frozen = !card.frozen;
-  saveState();
-  renderAdminDetail(custId);
-}
-
-function adminIssueCard(custId) {
-  const c = state.customers.find(x => x.id === custId);
-  const kind = c.cards.length % 2 === 0 ? 'Debit' : 'Credit';
-  const card = {
-    id: custId + '_card' + Date.now(), kind, number: String(1000 + Math.floor(Math.random() * 9000)),
-    holder: c.name, expiry: '12/29', frozen: false
-  };
-  if (kind === 'Credit') { card.balance = 0; card.limit = 5000; }
-  c.cards.push(card);
   saveState();
   renderAdminDetail(custId);
 }
@@ -791,20 +1829,20 @@ function adminDeleteCustomer(id) {
   adminGoList();
 }
 
-function handleReplacePhoto(e, custId) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    const c = state.customers.find(x => x.id === custId);
-    c.photo = ev.target.result;
-    saveState();
-    renderAdminDetail(custId);
-  };
-  reader.readAsDataURL(file);
-}
-
 /* ---------------- Init ---------------- */
 loadState();
+/* Suspension guard: once logged in, any click or form submit re-checks the account status. */
+['click', 'submit'].forEach(type => {
+  document.addEventListener(type, e => {
+    if (enforceSuspension()) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+});
+/* If the admin changes the status in another tab, react straight away. */
+window.addEventListener('storage', e => {
+  if (e.key === STORAGE_KEY) {
+    if (!enforceSuspension()) syncStatuses();
+    if (location.hash === '#/suspended') renderSuspended();
+  }
+});
 window.addEventListener('hashchange', routeFromHash);
 routeFromHash();
