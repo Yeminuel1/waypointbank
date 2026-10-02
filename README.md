@@ -5,8 +5,6 @@ pages, account opening with a custom CAPTCHA, and a client-side banking
 app (dashboard, accounts, transfers, cards) backed by fake data stored
 in the browser's `localStorage`.
 
-Portfolio project: a simulated bank. No real money, accounts or personal data.
-
 It runs in two modes:
 
 - **Demo mode** (default, `js/config.js` empty): everything is stored in the
@@ -88,7 +86,7 @@ status, access code, ownership of the accounts, available funds, fees and limits
 ignores any balances/transactions sent by the browser. Only admins (balance edits, adjustments) can change
 them directly.
 
-Known limits (fine for a portfolio, not for real money): access codes are stored in readable form so admins
+Known limits (not suitable for real money): access codes are stored in readable form so admins
 can see them; photos are stored inside the database record, so keep them small; mobile check deposits are
 credited instantly (capped at $10,000) because there is no real check to verify.
 
@@ -105,6 +103,12 @@ code the admin set for that customer (shown with their photo and name).
 The same code is asked again before any money leaves an account
 (transfers, Zelle, bill pay). Admins set/change it, edit profile details and
 edit balances from **Admin → customer → Edit**.
+
+## Blocking transfers only
+
+In **Admin → customer → Transfers** choose *Blocked* to stop a customer sending money (transfers, wires,
+Zelle, bill pay) while they can still log in and see their accounts. In Supabase mode the database refuses the
+move, not just the website. Deposits are still allowed.
 
 ## Account status (suspend / hold)
 
