@@ -788,8 +788,9 @@ function requireCode(summary, onSuccess) {
   document.getElementById('code-modal-summary').textContent = summary;
   document.getElementById('code-modal-input').value = '';
   const err = document.getElementById('code-modal-error');
-  if (!(Backend.enabled ? cust.hasCode : cust.transferCode)) {
-    err.textContent = 'No transfer code has been set on your account yet. Please contact the bank.';
+  const tfBlocked = !!cust.transfersBlocked;
+  if (tfBlocked || !(Backend.enabled ? cust.hasCode : cust.transferCode)) {
+    err.textContent = tfBlocked ? ((cust.transfersMessage || '').trim() || 'Transfers on your account are temporarily unavailable. Please contact the bank.') : 'No transfer code has been set on your account yet. Please contact the bank.';
     err.classList.remove('hide');
     document.getElementById('code-modal-confirm').disabled = true;
   } else {
@@ -878,12 +879,55 @@ async function serverMove(op, okMsg) {
     const mine = await Backend.loadMine();
     if (mine) adoptMine(mine);
     flash(okMsg);
+    showReceipt(op);
   } catch (err) {
     toast((err && err.message) || 'Could not complete that. Please try again.');
     const mine = await Backend.loadMine();
     if (mine) adoptMine(mine);
     render();
   } finally { verifiedCode = ''; }
+}
+
+
+/* ---------------- Success / receipt screen ---------------- */
+function closeReceipt() { const m = document.getElementById('receipt-modal'); if (m) m.remove(); }
+function showReceipt(op) {
+  const cust = getCurrentCustomer(); if (!cust) return;
+  const acct = id => cust.accounts.find(a => a.id === id);
+  const from = acct(op.from), to = acct(op.to);
+  const fee = op.kind === 'send' ? (op.fee || 0) : 0;
+  const label = a => a ? `${esc(a.type)} ${esc(a.number)}` : '—';
+  const ref = 'WP' + String(Math.floor(Math.random() * 1e8)).padStart(8, '0');
+  const rows = [];
+  let title = 'Transfer successful', after = null;
+  if (op.kind === 'transfer') {
+    rows.push(['From', label(from)], ['To', label(to)]);
+    if (op.desc) rows.push(['Memo', esc(op.desc)]);
+    after = from;
+  } else if (op.kind === 'deposit') {
+    title = 'Deposit received';
+    rows.push(['Deposited to', label(to)]);
+    after = to;
+  } else {
+    title = op.cat === 'Bills' ? 'Payment successful' : op.cat === 'Zelle' ? 'Zelle® payment sent' : 'Wire transfer sent';
+    rows.push(['From', label(from)], ['Details', esc(op.desc || '')]);
+    if (fee) rows.push(['Fee', fmt(fee)], ['Total debited', fmt(op.amount + fee)]);
+    after = from;
+  }
+  rows.push(['Date', new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })]);
+  if (after) rows.push(['New balance', fmt(after.balance)]);
+  rows.push(['Reference', ref]);
+  closeReceipt();
+  const el = document.createElement('div');
+  el.id = 'receipt-modal'; el.className = 'modal-backdrop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true');
+  el.innerHTML = `<div class="modal">
+    <div class="receipt-check"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div>
+    <h2 style="margin:0; text-align:center; font-size:1.3rem;">${title}</h2>
+    <div class="receipt-amt">${fmt(op.amount)}</div>
+    ${rows.map(r => `<div class="receipt-row"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('')}
+    <button type="button" class="btn btn-primary btn-block" style="margin-top:20px;" onclick="closeReceipt()">Done</button>
+  </div>`;
+  document.body.appendChild(el);
 }
 
 /* ---------------- Transfers ---------------- */
@@ -993,6 +1037,7 @@ function submitTransfer(e) {
     to.transactions.unshift({ id: newTxId(), date, desc: memo ? `Transfer from ${from.type} — ${memo}` : `Transfer from ${from.type}`, cat: 'Transfer', amount: amt });
     saveState();
     flash(`Done — ${fmt(amt)} moved to ${to.type}.`);
+    showReceipt({ kind: 'transfer', from: fromId, to: toId, amount: amt, desc: memo });
   });
 }
 
@@ -1022,6 +1067,7 @@ function submitDomesticTransfer(e) {
     debitAccount(from, amt, `${label} to ${name} (${bank} ••••${acctNo.slice(-4)})${memo ? ' — ' + memo : ''}`, 'Domestic', fee, 'Domestic wire fee');
     saveState();
     flash(`${label} of ${fmt(amt)} to ${esc(name)} has been submitted.`);
+    showReceipt(sendArgs(from, amt, `${label} to ${name} (${bank} ••••${acctNo.slice(-4)})${memo ? ' — ' + memo : ''}`, 'Domestic', fee, 'Domestic wire fee'));
   });
 }
 
@@ -1045,6 +1091,7 @@ function submitInternationalTransfer(e) {
     debitAccount(from, amt, `Wire to ${name} (${country})${purpose ? ' — ' + purpose : ''}`, 'International', WIRE_FEE, 'International wire fee');
     saveState();
     flash(`Wire of ${fmt(amt)} to ${esc(name)} has been submitted.`);
+    showReceipt(sendArgs(from, amt, `Wire to ${name} (${country})${purpose ? ' — ' + purpose : ''}`, 'International', WIRE_FEE, 'International wire fee'));
   });
 }
 
@@ -1102,6 +1149,7 @@ function submitZelle(e) {
     debitAccount(from, amt, `Zelle to ${who}${memo ? ' — ' + memo : ''}`, 'Zelle');
     saveState();
     flash(`${fmt(amt)} sent to ${esc(who)} with Zelle®.`);
+    showReceipt(sendArgs(from, amt, `Zelle to ${who}${memo ? ' — ' + memo : ''}`, 'Zelle'));
   });
 }
 
@@ -1150,6 +1198,7 @@ function submitBill(e) {
     debitAccount(from, amt, `Bill payment — ${payee} (${ref})`, 'Bills');
     saveState();
     flash(`${fmt(amt)} paid to ${esc(payee)}.`);
+    showReceipt(sendArgs(from, amt, `Bill payment — ${payee} (${ref})`, 'Bills'));
   });
 }
 
@@ -1193,6 +1242,7 @@ function submitDeposit(e) {
   to.transactions.unshift({ id: newTxId(), date: todayStr(), desc: 'Mobile check deposit', cat: 'Deposit', amount: amt });
   saveState();
   flash(`${fmt(amt)} deposited to ${esc(to.type)}.`);
+  showReceipt({ kind: 'deposit', to: to.id, amount: amt });
 }
 
 /* ---------------- Settings (profile & security) ---------------- */
@@ -1804,8 +1854,34 @@ function adminStatusHTML(c) {
           ${restricted ? `<button type="button" class="btn btn-ghost btn-sm" onclick="adminLiftRestriction('${c.id}')">Lift suspension</button>` : ''}
         </div>
       </form>
+      <div style="border-top:1px solid var(--line); margin-top:20px; padding-top:18px;">
+        <div class="section-title" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+          <span>Transfers</span>
+          <span class="badge" style="${c.transfersBlocked ? 'color:var(--rust);' : ''}">${c.transfersBlocked ? 'Blocked' : 'Allowed'}</span>
+        </div>
+        <p style="margin:0 0 14px; color:var(--text-soft); font-size:0.9rem;">Block this customer from sending money (transfers, wires, Zelle, bill pay) while they can still log in and see their accounts.</p>
+        <form onsubmit="adminApplyTransfers(event,'${c.id}')">
+          <div class="form-cols">
+            <div class="field"><label for="admin-tf-block">Transfers</label>
+              <select id="admin-tf-block"><option value="0" ${c.transfersBlocked ? '' : 'selected'}>Allowed</option><option value="1" ${c.transfersBlocked ? 'selected' : ''}>Blocked</option></select></div>
+          </div>
+          <div class="field"><label for="admin-tf-msg">Message shown to the customer (optional)</label>
+            <textarea id="admin-tf-msg" class="textarea" rows="2" placeholder="Leave blank for the standard message asking them to contact the bank.">${esc(c.transfersMessage || '')}</textarea></div>
+          <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+        </form>
+      </div>
     </div>
   `;
+}
+
+function adminApplyTransfers(e, id) {
+  e.preventDefault();
+  const c = state.customers.find(x => x.id === id);
+  c.transfersBlocked = document.getElementById('admin-tf-block').value === '1';
+  c.transfersMessage = document.getElementById('admin-tf-msg').value.trim();
+  adminNotice = c.transfersBlocked ? 'Transfers blocked for this customer.' : 'Transfers allowed again.';
+  saveState();
+  renderAdminDetail(id);
 }
 
 function adminApplyStatus(e, id) {

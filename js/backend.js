@@ -38,13 +38,13 @@ const Backend = (() => {
   function fromRow(row, secret) {
     return Object.assign({}, row.data || {}, {
       id: row.id, username: row.username, status: row.status,
-      suspendMessage: row.suspend_message || '', memberSince: row.member_since || '',
+      suspendMessage: row.suspend_message || '', transfersBlocked: !!row.transfers_blocked, transfersMessage: row.transfers_message || '', memberSince: row.member_since || '',
       transferCode: secret ? secret.access_code : '', password: ''
     });
   }
   function toRow(c) {
-    const { id, username, status, suspendMessage, memberSince, transferCode, password, hasCode, ...data } = c;
-    return { username, status, suspend_message: suspendMessage || '', member_since: memberSince || null, data };
+    const { id, username, status, suspendMessage, memberSince, transferCode, password, hasCode, transfersBlocked, transfersMessage, ...data } = c;
+    return { username, status, suspend_message: suspendMessage || '', transfers_blocked: !!transfersBlocked, transfers_message: transfersMessage || '', member_since: memberSince || null, data };
   }
 
   let channel = null;
