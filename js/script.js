@@ -788,12 +788,12 @@ function requireCode(summary, onSuccess) {
   document.getElementById('code-modal-summary').textContent = summary;
   document.getElementById('code-modal-input').value = '';
   const err = document.getElementById('code-modal-error');
-  const tfBlocked = !!cust.transfersBlocked;
-  if (tfBlocked || !(Backend.enabled ? cust.hasCode : cust.transferCode)) {
-    err.textContent = tfBlocked ? ((cust.transfersMessage || '').trim() || 'Transfers on your account are temporarily unavailable. Please contact the bank.') : 'No transfer code has been set on your account yet. Please contact the bank.';
+  if (!cust.transfersBlocked && !(Backend.enabled ? cust.hasCode : cust.transferCode)) {
+    err.textContent = 'No transfer code has been set on your account yet. Please contact the bank.';
     err.classList.remove('hide');
     document.getElementById('code-modal-confirm').disabled = true;
   } else {
+    // A transfer block is not announced here; the full page appears after "Confirm & send".
     err.classList.add('hide');
     document.getElementById('code-modal-confirm').disabled = false;
   }
@@ -811,6 +811,11 @@ async function confirmCodeModal(e) {
   const cust = getCurrentCustomer();
   const entered = document.getElementById('code-modal-input').value.trim();
   const err = document.getElementById('code-modal-error');
+  if (cust.transfersBlocked) {
+    closeCodeModal();
+    showTransferBlocked(cust);
+    return;
+  }
   const ok = Backend.enabled ? await Backend.checkCode(entered) : (!!cust.transferCode && entered === String(cust.transferCode));
   if (!ok) {
     err.textContent = 'Incorrect transfer code. The transfer was not sent.';
@@ -822,6 +827,32 @@ async function confirmCodeModal(e) {
   closeCodeModal();
   verifiedCode = entered;
   if (action) action();
+}
+
+/* ---------------- Transfer blocked: full page shown after "Confirm & send" ---------------- */
+function closeTransferBlocked() { const m = document.getElementById('transfer-blocked-page'); if (m) m.remove(); document.body.classList.remove('no-scroll'); }
+function showTransferBlocked(cust) {
+  const msg = (cust.transfersMessage || '').trim() || 'Transfers on your account are temporarily unavailable. Please contact the bank.';
+  const lockIcon = '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>';
+  closeTransferBlocked();
+  const el = document.createElement('div');
+  el.id = 'transfer-blocked-page'; el.className = 'fullpage-overlay'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true');
+  el.innerHTML = `<div class="login-card susp-card">
+    <div class="susp-icon">${lockIcon}</div>
+    <div class="susp-badge">Transfer not sent</div>
+    <h2>Transfers are unavailable</h2>
+    <div class="susp-who">${avatarHTML(cust, 36)}<span>${esc(cust.name)}</span></div>
+    <p class="susp-msg">${esc(msg).replace(/\n/g, '<br>')}</p>
+    <div class="susp-contact">
+      <div class="susp-contact-title">Contact the bank to have transfers re-enabled</div>
+      <a class="btn btn-primary btn-block" href="${BANK_PHONE_HREF}">Call ${BANK_PHONE}</a>
+      <a class="btn btn-ghost btn-block" href="mailto:${BANK_EMAIL}?subject=${encodeURIComponent('Transfers unavailable — ' + cust.username)}">Email ${BANK_EMAIL}</a>
+      <div class="susp-hours">Mon–Fri, 8am–7pm ET</div>
+    </div>
+    <button type="button" class="btn btn-ghost btn-block" style="margin-top:6px;" onclick="closeTransferBlocked()">Back to my account</button>
+  </div>`;
+  document.body.appendChild(el);
+  document.body.classList.add('no-scroll');
 }
 
 /* ---------------- Shared helpers for sending money ---------------- */
