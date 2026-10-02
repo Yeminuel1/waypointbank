@@ -1,11 +1,13 @@
 /* ============================================================
-   DEMO STATE — fictional data, persisted locally per browser
+   DEMO STATE — fictional data, persisted locally per browser.
+   Multiple customers live under state.customers; state.currentCustomerId
+   is whoever is logged into the member-facing app right now.
    ============================================================ */
-const STORAGE_KEY = 'waypoint-state-v1';
+const STORAGE_KEY = 'waypoint-state-v2';
 
 function seedState() {
-  return {
-    memberName: 'Alex Morgan',
+  const alex = {
+    id: 'cust_alex', name: 'Alex Morgan', username: 'alexmorgan', email: 'alex@waypoint-demo.com', photo: null,
     accounts: [
       {
         id: 'chk', type: 'Everyday Checking', number: '••••4821', balance: 4382.10,
@@ -29,10 +31,29 @@ function seedState() {
       }
     ],
     cards: [
-      { id: 'debit', kind: 'Debit', label: 'Everyday Checking Debit', number: '4821', linkedAccount: 'chk', frozen: false },
-      { id: 'credit', kind: 'Credit', label: 'Waypoint Rewards Credit', number: '7734', balance: 612.30, limit: 5000, frozen: false },
+      { id: 'debit', kind: 'Debit', label: 'Everyday Checking Debit', number: '4821', holder: 'Alex Morgan', expiry: '12/29', frozen: false },
+      { id: 'credit', kind: 'Credit', label: 'Waypoint Rewards Credit', number: '7734', holder: 'Alex Morgan', expiry: '05/28', balance: 612.30, limit: 5000, frozen: false },
     ]
   };
+
+  const jordan = {
+    id: 'cust_jordan', name: 'Jordan Lee', username: 'jordanlee', email: 'jordan@waypoint-demo.com', photo: null,
+    accounts: [
+      {
+        id: 'cust_jordan_chk', type: 'Everyday Checking', number: '••••2256', balance: 1180.55,
+        transactions: [
+          { date: '2026-09-20', desc: 'Paycheck deposit', cat: 'Income', amount: 1450.00 },
+          { date: '2026-09-17', desc: 'Riverside Coffee Co.', cat: 'Dining', amount: -5.25 },
+          { date: '2026-09-10', desc: 'Northline Electric', cat: 'Utilities', amount: -64.10 },
+        ]
+      }
+    ],
+    cards: [
+      { id: 'cust_jordan_debit', kind: 'Debit', label: 'Everyday Checking Debit', number: '3391', holder: 'Jordan Lee', expiry: '08/28', frozen: false }
+    ]
+  };
+
+  return { customers: [alex, jordan], currentCustomerId: alex.id };
 }
 
 let state = null;
@@ -40,14 +61,17 @@ let state = null;
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) { state = JSON.parse(raw); return; }
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.customers) && parsed.customers.length) { state = parsed; return; }
+    }
   } catch (e) { console.warn('Could not read saved demo state', e); }
   state = seedState();
 }
 
 function saveState() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-  catch (e) { console.warn('Could not save demo state', e); }
+  catch (e) { console.warn('Could not save demo state — image may be too large for local storage', e); }
 }
 
 function fmt(n) {
@@ -58,7 +82,61 @@ function fmt(n) {
 function fmtDate(d) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
-function getAccount(id) { return state.accounts.find(a => a.id === id); }
+
+function getCurrentCustomer() {
+  return state.customers.find(c => c.id === state.currentCustomerId) || state.customers[0];
+}
+function getAccount(id) {
+  const cust = getCurrentCustomer();
+  return cust ? cust.accounts.find(a => a.id === id) : null;
+}
+
+/* A small circular photo, or initials if no photo has been uploaded. */
+function avatarHTML(cust, size) {
+  size = size || 36;
+  if (cust && cust.photo) {
+    return `<img src="${cust.photo}" alt="${cust.name}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex:none;">`;
+  }
+  const initials = ((cust && cust.name) || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  const fs = Math.round(size * 0.4);
+  return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:var(--brass);color:#241a0c;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${fs}px;flex:none;">${initials}</div>`;
+}
+
+/* Standard-format card: ID-1 proportions, chip, embossed number, network mark. */
+function cardMarkup(c) {
+  return `
+    <div class="bankcard ${c.kind === 'Debit' ? 'debit' : 'credit'} ${c.frozen ? 'frozen' : ''}">
+      <div class="bc-top">
+        <div class="bc-chip"></div>
+        <span class="bc-kind">${c.kind}</span>
+      </div>
+      <div class="bc-number">•••• •••• •••• ${c.number}</div>
+      <div class="bc-bottom">
+        <div>
+          <div class="bc-name">${(c.holder || '').toUpperCase()}</div>
+          <div class="bc-expiry">VALID THRU ${c.expiry || '12/29'}</div>
+        </div>
+        <div class="bc-network"><span class="c1"></span><span class="c2"></span></div>
+      </div>
+    </div>
+  `;
+}
+
+/* Creates a new customer record: one checking account + one debit card. */
+function createCustomer({ name, username, email, photo, startingBalance }) {
+  const id = 'cust_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+  const acctNum = '••••' + String(1000 + Math.floor(Math.random() * 9000));
+  const cardNum = String(1000 + Math.floor(Math.random() * 9000));
+  const customer = {
+    id, name, email: email || '',
+    username: (username || name.toLowerCase().replace(/\s+/g, '')),
+    photo: photo || null,
+    accounts: [{ id: id + '_chk', type: 'Everyday Checking', number: acctNum, balance: startingBalance || 0, transactions: [] }],
+    cards: [{ id: id + '_debit', kind: 'Debit', label: 'Everyday Checking Debit', number: cardNum, holder: name, expiry: '12/29', frozen: false }]
+  };
+  state.customers.push(customer);
+  return customer;
+}
 
 /* ---------------- View switching (public / login / app) ---------------- */
 function showOnly(id) {
@@ -68,71 +146,21 @@ function showOnly(id) {
   window.scrollTo(0,0);
 }
 
-const STATIC_PAGES = ['home','personal','business','contact','open-account','about','faq','terms','privacy','security'];
+const STATIC_PAGES = ['home','personal','business','open-account','about','faq','terms','privacy','security','contact','admin-login'];
 function showPublicPage(name) {
   document.querySelectorAll('.public-page').forEach(el => {
     el.classList.toggle('hide', el.id !== 'page-' + name);
   });
   window.scrollTo(0,0);
-  closePublicNav();
   if (name === 'open-account') generateCaptcha();
-  if (name === 'contact') resetContactForm();
-}
-
-/* ---------------- Mobile nav (public site) ---------------- */
-function togglePublicNav() {
-  const nav = document.getElementById('mobile-nav');
-  const open = nav.classList.toggle('hide') === false;
-  document.querySelector('#public-view .menu-toggle').setAttribute('aria-expanded', String(open));
-}
-function closePublicNav() {
-  const nav = document.getElementById('mobile-nav');
-  if (!nav) return;
-  nav.classList.add('hide');
-  const t = document.querySelector('#public-view .menu-toggle');
-  if (t) t.setAttribute('aria-expanded', 'false');
-}
-
-/* ---------------- Contact form ----------------
-   Concept site: there is no backend, so the message is validated and
-   confirmed on screen but not actually sent anywhere. To make it real,
-   POST the fields below to a form service or your own API in handleContact.
------------------------------------------------- */
-function handleContact(e) {
-  e.preventDefault();
-  const name = document.getElementById('ct-name').value.trim();
-  const email = document.getElementById('ct-email').value.trim();
-  const message = document.getElementById('ct-message').value.trim();
-  const errEl = document.getElementById('ct-error');
-  errEl.classList.add('hide');
-
-  if (!name) return showContactError('Please enter your name.');
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showContactError('Please enter a valid email address.');
-  if (message.length < 10) return showContactError('Please tell us a little more in your message.');
-
-  document.getElementById('contact-success-text').textContent =
-    `Thanks, ${name.split(' ')[0]}. A banker will get back to you at ${email} soon. If it's urgent, call (240) 242-7078.`;
-  document.getElementById('contact-form').classList.add('hide');
-  const ok = document.getElementById('contact-success');
-  ok.classList.remove('hide');
-  ok.focus();
-}
-function showContactError(msg) {
-  const errEl = document.getElementById('ct-error');
-  errEl.textContent = msg;
-  errEl.classList.remove('hide');
-}
-function resetContactForm() {
-  const form = document.getElementById('contact-form');
-  if (!form) return;
-  form.reset();
-  form.classList.remove('hide');
-  document.getElementById('contact-success').classList.add('hide');
-  document.getElementById('ct-error').classList.add('hide');
 }
 
 function handleLogin(e) {
   e.preventDefault();
+  const uname = document.getElementById('li-user').value.trim().toLowerCase();
+  const match = state.customers.find(c => c.username.toLowerCase() === uname);
+  state.currentCustomerId = (match || state.customers[0]).id;
+  saveState();
   location.hash = '#/app/dashboard';
 }
 function logout() {
@@ -146,14 +174,16 @@ function toggleMobileNav() {
 /* ---------------- Router ----------------
    Every page has its own real, shareable URL:
    #/              marketing home
-   #/personal      personal banking
-   #/business      business banking
-   #/contact       contact page with form
    #/about         about page
    #/faq           FAQ page
    #/terms         terms of service
    #/privacy       privacy policy
    #/security      security page
+   #/personal      personal banking
+   #/business      business banking
+   #/contact       contact page
+   #/admin-login   staff sign-in (gated)
+   #/admin         admin dashboard (requires sign-in)
    #/login         login
    #/app/dashboard account dashboard
    #/app/accounts  accounts list
@@ -182,13 +212,25 @@ function routeFromHash() {
     const parts = hash.slice('#/app'.length).split('/').filter(Boolean);
     currentPage = parts[0] || 'dashboard';
     currentAccountId = parts[1] || null;
-    document.getElementById('sidebar-who').textContent = state.memberName;
+    const cust = getCurrentCustomer();
+    document.getElementById('sidebar-who').innerHTML =
+      avatarHTML(cust, 34) + `<span style="color:var(--text-on-ink); font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${cust.name}</span>`;
     document.querySelectorAll('.app-nav .navlink').forEach(b => {
       b.classList.toggle('active', b.dataset.page === currentPage);
     });
     document.getElementById('app-sidebar').classList.remove('mobile-open');
     showOnly('app-view');
     render();
+    return;
+  }
+
+  if (hash === '#/admin') {
+    if (!isAdminAuthed()) { location.hash = '#/admin-login'; return; }
+    showOnly('public-view');
+    showPublicPage('admin');
+    adminView = 'list';
+    adminSelectedId = null;
+    renderAdmin();
     return;
   }
 
@@ -215,21 +257,25 @@ function render() {
 
 /* ---------------- Dashboard ---------------- */
 function renderDashboard() {
-  const totalBal = state.accounts.reduce((s,a) => s + a.balance, 0);
-  const allTx = state.accounts.flatMap(a => a.transactions.map(t => ({...t, acct: a.type})))
+  const cust = getCurrentCustomer();
+  const totalBal = cust.accounts.reduce((s,a) => s + a.balance, 0);
+  const allTx = cust.accounts.flatMap(a => a.transactions.map(t => ({...t, acct: a.type})))
     .sort((a,b) => b.date.localeCompare(a.date)).slice(0,6);
 
   return `
     <div class="page-head">
-      <div>
-        <h1>Good to see you, ${state.memberName.split(' ')[0]}</h1>
-        <div class="sub">Total balance across all accounts: ${fmt(totalBal)}</div>
+      <div style="display:flex; align-items:center; gap:14px;">
+        ${avatarHTML(cust, 50)}
+        <div>
+          <h1>Good to see you, ${cust.name.split(' ')[0]}</h1>
+          <div class="sub">Total balance across all accounts: ${fmt(totalBal)}</div>
+        </div>
       </div>
       <a class="btn btn-brass" href="#/app/transfers">Make a transfer</a>
     </div>
 
     <div class="acct-grid">
-      ${state.accounts.map(a => `
+      ${cust.accounts.map(a => `
         <a class="card acct-card" href="#/app/accounts/${a.id}">
           <div class="label"><span>${a.type}</span><span>${a.number}</span></div>
           <div class="bal">${fmt(a.balance)}</div>
@@ -262,12 +308,13 @@ function renderDashboard() {
 
 /* ---------------- Accounts ---------------- */
 function renderAccountsList() {
+  const cust = getCurrentCustomer();
   return `
     <div class="page-head">
-      <div><h1>Accounts</h1><div class="sub">${state.accounts.length} open accounts</div></div>
+      <div><h1>Accounts</h1><div class="sub">${cust.accounts.length} open accounts</div></div>
     </div>
     <div class="accounts-list-page">
-      ${state.accounts.map(a => `
+      ${cust.accounts.map(a => `
         <a class="card accrow" href="#/app/accounts/${a.id}">
           <div>
             <div style="font-weight:600;">${a.type}</div>
@@ -319,8 +366,9 @@ function renderAccountDetail(id) {
 
 /* ---------------- Transfers ---------------- */
 function renderTransfers() {
-  const opts = state.accounts.map(a => `<option value="${a.id}">${a.type} (${a.number}) — ${fmt(a.balance)}</option>`).join('');
-  const recentTransfers = state.accounts.flatMap(a => a.transactions.filter(t => t.cat === 'Transfer').map(t => ({...t, acct: a.type})))
+  const cust = getCurrentCustomer();
+  const opts = cust.accounts.map(a => `<option value="${a.id}">${a.type} (${a.number}) — ${fmt(a.balance)}</option>`).join('');
+  const recentTransfers = cust.accounts.flatMap(a => a.transactions.filter(t => t.cat === 'Transfer').map(t => ({...t, acct: a.type})))
     .sort((a,b) => b.date.localeCompare(a.date)).slice(0,5);
 
   return `
@@ -391,24 +439,18 @@ function submitTransfer(e) {
 
 /* ---------------- Cards ---------------- */
 function renderCards() {
+  const cust = getCurrentCustomer();
   return `
     <div class="page-head"><div><h1>Cards</h1><div class="sub">Freeze a card instantly if it's ever lost or misplaced.</div></div></div>
     <div class="cards-grid">
-      ${state.cards.map(c => `
+      ${cust.cards.map(c => `
         <div>
-          <div class="bankcard ${c.kind==='Debit'?'debit':'credit'} ${c.frozen?'frozen':''}">
-            <div class="bc-top"><span>Waypoint ${c.kind}</span><span>${c.frozen ? 'Frozen' : 'Active'}</span></div>
-            <div class="bc-num">•••• •••• •••• ${c.number}</div>
-            <div class="bc-bottom">
-              <span>${c.label}</span>
-              <span>${c.kind === 'Credit' ? fmt(c.balance) + ' owed' : ''}</span>
-            </div>
-          </div>
+          ${cardMarkup(c)}
           <div class="card-controls">
             <label class="toggle ${c.frozen ? 'on' : ''}" onclick="toggleFreeze('${c.id}')">
               <span class="sw"></span> ${c.frozen ? 'Card frozen' : 'Freeze card'}
             </label>
-            ${c.kind === 'Credit' ? `<span style="font-size:0.8rem; color:var(--text-soft);">Limit ${fmt(c.limit)}</span>` : ''}
+            ${c.kind === 'Credit' ? `<span style="font-size:0.8rem; color:var(--text-soft);">${fmt(c.balance)} owed · Limit ${fmt(c.limit)}</span>` : ''}
           </div>
         </div>
       `).join('')}
@@ -417,7 +459,8 @@ function renderCards() {
 }
 
 function toggleFreeze(id) {
-  const c = state.cards.find(c => c.id === id);
+  const cust = getCurrentCustomer();
+  const c = cust.cards.find(c => c.id === id);
   c.frozen = !c.frozen;
   saveState();
   render();
@@ -496,10 +539,269 @@ function handleOpenAccount(e) {
   }
   errEl.classList.add('hide');
 
-  const name = document.getElementById('oa-name').value.trim();
-  if (name) state.memberName = name;
+  const name = document.getElementById('oa-name').value.trim() || 'New Member';
+  const email = document.getElementById('oa-email').value.trim();
+  const username = document.getElementById('oa-username').value.trim();
+
+  const existing = state.customers.find(c => c.username.toLowerCase() === username.toLowerCase());
+  const customer = existing || createCustomer({ name, username, email, startingBalance: 0 });
+  state.currentCustomerId = customer.id;
   saveState();
   location.hash = '#/app/dashboard';
+}
+
+/* ---------------- Contact form ---------------- */
+function handleContact(e) {
+  e.preventDefault();
+  document.getElementById('contact-form').classList.add('hide');
+  document.getElementById('contact-success').classList.remove('hide');
+}
+
+/* ---------------- Admin ----------------
+   A second, genuinely gated login separate from the member demo login:
+   it checks real credentials and keeps you signed out of /admin until
+   you pass them. Session-only (clears when the browser tab closes).
+------------------------------------------- */
+const ADMIN_USER = 'admin';
+const ADMIN_PASS = 'waypoint2026';
+
+function isAdminAuthed() {
+  try { return sessionStorage.getItem('waypoint-admin-authed') === '1'; }
+  catch (e) { return false; }
+}
+
+function handleAdminLogin(e) {
+  e.preventDefault();
+  const u = document.getElementById('admin-user').value.trim();
+  const p = document.getElementById('admin-pass').value;
+  const errEl = document.getElementById('admin-login-error');
+
+  if (u === ADMIN_USER && p === ADMIN_PASS) {
+    try { sessionStorage.setItem('waypoint-admin-authed', '1'); } catch (e) {}
+    errEl.classList.add('hide');
+    location.hash = '#/admin';
+  } else {
+    errEl.classList.remove('hide');
+  }
+}
+
+function adminLogout() {
+  try { sessionStorage.removeItem('waypoint-admin-authed'); } catch (e) {}
+  location.hash = '#/';
+}
+
+let adminView = 'list';       // 'list' | 'add' | 'detail'
+let adminSelectedId = null;
+
+function adminGoList()  { adminView = 'list';  adminSelectedId = null; renderAdmin(); }
+function adminGoAdd()   { adminView = 'add';   renderAdmin(); }
+function adminGoDetail(id) { adminView = 'detail'; adminSelectedId = id; renderAdmin(); }
+
+function renderAdmin() {
+  if (adminView === 'add') return renderAdminAdd();
+  if (adminView === 'detail' && adminSelectedId) return renderAdminDetail(adminSelectedId);
+  return renderAdminList();
+}
+
+function renderAdminList() {
+  const el = document.getElementById('admin-main');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="page-head">
+      <div><h1>Admin — customers</h1><div class="sub">${state.customers.length} registered customers</div></div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn btn-brass btn-sm" onclick="adminGoAdd()">+ Add customer</button>
+        <button class="btn btn-ghost btn-sm" onclick="adminLogout()">Log out</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="table-scroll">
+        <table class="tx">
+          <thead><tr><th></th><th>Name</th><th>Username</th><th>Email</th><th style="text-align:right;">Total balance</th></tr></thead>
+          <tbody>
+            ${state.customers.map(c => `
+              <tr style="cursor:pointer;" onclick="adminGoDetail('${c.id}')">
+                <td>${avatarHTML(c, 32)}</td>
+                <td style="font-weight:600;">${c.name}</td>
+                <td>@${c.username}</td>
+                <td>${c.email || '—'}</td>
+                <td style="text-align:right;">${fmt(c.accounts.reduce((s,a) => s + a.balance, 0))}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function renderAdminAdd() {
+  const el = document.getElementById('admin-main');
+  if (!el) return;
+  el.innerHTML = `
+    <a href="#" onclick="adminGoList();return false;" style="font-size:0.85rem; color:var(--text-soft); text-decoration:none;">← All customers</a>
+    <div class="page-head" style="margin-top:10px;"><div><h1>Add a customer</h1><div class="sub">Creates a login, a checking account, and a debit card.</div></div></div>
+    <form class="card card-pad" style="max-width:480px;" onsubmit="handleAddCustomer(event)">
+      <div class="field"><label for="admin-new-name">Full name</label><input id="admin-new-name" type="text" required></div>
+      <div class="field"><label for="admin-new-username">Username (for their login)</label><input id="admin-new-username" type="text" required></div>
+      <div class="field"><label for="admin-new-email">Email</label><input id="admin-new-email" type="email"></div>
+      <div class="field"><label for="admin-new-balance">Starting checking balance</label><div class="amount-input"><span>$</span><input id="admin-new-balance" type="number" step="0.01" value="0"></div></div>
+      <div class="field"><label for="admin-new-photo">Photo</label><input id="admin-new-photo" type="file" accept="image/*"></div>
+      <p style="font-size:0.8rem; color:var(--text-soft); margin:-8px 0 16px;">This photo appears at the top of their account when they log in. Use a small image — it's stored in the browser.</p>
+      <div style="display:flex; gap:10px;">
+        <button type="submit" class="btn btn-primary">Create customer</button>
+        <button type="button" class="btn btn-ghost" onclick="adminGoList()">Cancel</button>
+      </div>
+    </form>
+  `;
+}
+
+function handleAddCustomer(e) {
+  e.preventDefault();
+  const name = document.getElementById('admin-new-name').value.trim();
+  const username = document.getElementById('admin-new-username').value.trim();
+  const email = document.getElementById('admin-new-email').value.trim();
+  const startingBalance = parseFloat(document.getElementById('admin-new-balance').value) || 0;
+  const file = document.getElementById('admin-new-photo').files[0];
+
+  function finish(photo) {
+    createCustomer({ name, username, email, photo, startingBalance });
+    saveState();
+    adminGoList();
+  }
+
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = (ev) => finish(ev.target.result);
+    reader.readAsDataURL(file);
+  } else {
+    finish(null);
+  }
+}
+
+function renderAdminDetail(id) {
+  const el = document.getElementById('admin-main');
+  const c = state.customers.find(x => x.id === id);
+  if (!el) return;
+  if (!c) { adminGoList(); return; }
+
+  el.innerHTML = `
+    <a href="#" onclick="adminGoList();return false;" style="font-size:0.85rem; color:var(--text-soft); text-decoration:none;">← All customers</a>
+    <div class="page-head" style="margin-top:10px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        ${avatarHTML(c, 54)}
+        <div><h1>${c.name}</h1><div class="sub">@${c.username} · ${c.email || 'no email on file'}</div></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="color:var(--rust); border-color:var(--rust);" onclick="adminDeleteCustomer('${c.id}')">Delete customer</button>
+    </div>
+
+    <div class="card card-pad" style="margin-bottom:20px;">
+      <div class="section-title">Replace photo</div>
+      <input type="file" accept="image/*" onchange="handleReplacePhoto(event,'${c.id}')">
+      <p style="font-size:0.8rem; color:var(--text-soft); margin:8px 0 0;">Shown at the top of their account when they log in.</p>
+    </div>
+
+    <div class="acct-grid">
+      ${c.accounts.map(a => `
+        <div class="card acct-card" style="cursor:default;">
+          <div class="label"><span>${a.type}</span><span>${a.number}</span></div>
+          <div class="bal">${fmt(a.balance)}</div>
+          <div class="num">Current balance</div>
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="card card-pad" style="margin-bottom:24px;">
+      <div class="section-title">Adjust a balance</div>
+      <form onsubmit="submitAdminAdjustment(event,'${c.id}')" style="display:grid; grid-template-columns:1.3fr 1fr 1.3fr auto; gap:12px; align-items:end;">
+        <div class="field" style="margin:0;"><label>Account</label>
+          <select id="admin-adj-account">${c.accounts.map(a => `<option value="${a.id}">${a.type}</option>`).join('')}</select>
+        </div>
+        <div class="field" style="margin:0;"><label>Amount</label>
+          <div class="amount-input"><span>$</span><input id="admin-adj-amount" type="number" step="0.01" required></div>
+        </div>
+        <div class="field" style="margin:0;"><label>Reason</label><input id="admin-adj-reason" type="text" placeholder="e.g. Fee reversal"></div>
+        <button type="submit" class="btn btn-brass">Apply</button>
+      </form>
+      <p style="font-size:0.8rem; color:var(--text-soft); margin-top:10px;">Use a negative amount to deduct funds.</p>
+    </div>
+
+    <div class="card card-pad">
+      <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>Cards</span>
+        <button class="btn btn-ghost btn-sm" onclick="adminIssueCard('${c.id}')">+ Issue card</button>
+      </div>
+      <div class="cards-grid">
+        ${c.cards.map(card => `
+          <div>
+            ${cardMarkup(card)}
+            <div class="card-controls">
+              <label class="toggle ${card.frozen ? 'on' : ''}" onclick="adminToggleFreeze('${c.id}','${card.id}')"><span class="sw"></span> ${card.frozen ? 'Frozen' : 'Freeze card'}</label>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function submitAdminAdjustment(e, custId) {
+  e.preventDefault();
+  const c = state.customers.find(x => x.id === custId);
+  const accId = document.getElementById('admin-adj-account').value;
+  const amt = parseFloat(document.getElementById('admin-adj-amount').value);
+  const reason = document.getElementById('admin-adj-reason').value.trim() || 'Admin adjustment';
+  if (!amt) return;
+
+  const acc = c.accounts.find(a => a.id === accId);
+  acc.balance = +(acc.balance + amt).toFixed(2);
+  const today = new Date().toISOString().slice(0, 10);
+  acc.transactions.unshift({ date: today, desc: reason, cat: 'Admin', amount: amt });
+  saveState();
+  renderAdminDetail(custId);
+}
+
+function adminToggleFreeze(custId, cardId) {
+  const c = state.customers.find(x => x.id === custId);
+  const card = c.cards.find(k => k.id === cardId);
+  card.frozen = !card.frozen;
+  saveState();
+  renderAdminDetail(custId);
+}
+
+function adminIssueCard(custId) {
+  const c = state.customers.find(x => x.id === custId);
+  const kind = c.cards.length % 2 === 0 ? 'Debit' : 'Credit';
+  const card = {
+    id: custId + '_card' + Date.now(), kind, number: String(1000 + Math.floor(Math.random() * 9000)),
+    holder: c.name, expiry: '12/29', frozen: false
+  };
+  if (kind === 'Credit') { card.balance = 0; card.limit = 5000; }
+  c.cards.push(card);
+  saveState();
+  renderAdminDetail(custId);
+}
+
+function adminDeleteCustomer(id) {
+  if (!confirm('Delete this customer? This cannot be undone.')) return;
+  state.customers = state.customers.filter(c => c.id !== id);
+  if (!state.customers.length) state.customers = seedState().customers;
+  if (state.currentCustomerId === id) state.currentCustomerId = state.customers[0].id;
+  saveState();
+  adminGoList();
+}
+
+function handleReplacePhoto(e, custId) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const c = state.customers.find(x => x.id === custId);
+    c.photo = ev.target.result;
+    saveState();
+    renderAdminDetail(custId);
+  };
+  reader.readAsDataURL(file);
 }
 
 /* ---------------- Init ---------------- */
