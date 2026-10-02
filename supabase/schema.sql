@@ -14,11 +14,16 @@ create table if not exists public.customers (
   username text not null,
   status text not null default 'pending' check (status in ('pending','approved','suspended','hold')),
   suspend_message text not null default '',
+  transfers_blocked boolean not null default false,
+  transfers_message text not null default '',
   member_since date not null default current_date,
   data jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
 create unique index if not exists customers_username_key on public.customers (lower(username));
+-- for databases created before transfer-blocking existed:
+alter table public.customers add column if not exists transfers_blocked boolean not null default false;
+alter table public.customers add column if not exists transfers_message text not null default '';
 
 -- Access / transfer codes. Only admins can read these; customers can only ask "is this code right?".
 create table if not exists public.customer_secrets (
@@ -94,6 +99,9 @@ begin
   c := (select t from public.customers t where t.id = auth.uid() and t.status = 'approved' for update);
   if c.id is null then raise exception 'Account is not active'; end if;
   if p_kind not in ('transfer', 'send', 'deposit') then raise exception 'Unknown operation'; end if;
+  if c.transfers_blocked and p_kind in ('transfer', 'send') then
+    raise exception '%', coalesce(nullif(c.transfers_message, ''), 'Transfers on your account are temporarily unavailable. Please contact the bank.');
+  end if;
   if amt <= 0 then raise exception 'Enter an amount greater than zero.'; end if;
 
   if p_kind <> 'deposit' and not exists (
