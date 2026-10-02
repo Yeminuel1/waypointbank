@@ -34,7 +34,4 @@ index.html    page markup
 css/style.css all styles
 js/script.js  all app logic (routing, state, rendering)
 vercel.json   serves index.html for every route
-
-Public pages: Home, Personal, Business, Contact, About, FAQ, Terms,
-Privacy, Security. The contact form is client-side only (no backend).
 ```
